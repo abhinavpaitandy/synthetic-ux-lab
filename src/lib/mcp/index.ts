@@ -1,4 +1,4 @@
-import { auth, defineMcp, type AnyToolDefinition } from "@lovable.dev/mcp-js";
+import { auth, defineMcp } from "@lovable.dev/mcp-js";
 
 import compareVariantsTool from "./tools/compare-variants";
 import getExperimentTool from "./tools/get-experiment";
@@ -16,5 +16,5 @@ export default defineMcp({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated",
   }),
-  tools: [listExperimentsTool, getExperimentTool, compareVariantsTool] as AnyToolDefinition[],
+  tools: [listExperimentsTool, getExperimentTool, compareVariantsTool] as unknown as Parameters<typeof defineMcp>[0]["tools"],
 });
