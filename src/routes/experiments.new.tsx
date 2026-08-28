@@ -59,14 +59,17 @@ function NewExperimentPage() {
 
   function addVariant() {
     if (variants.length >= 3) return;
-    const key = ["a", "b", "c"][variants.length];
-    setVariants((vs) => [...vs, { key, name: VARIANT_NAMES[vs.length], source: "", file: "" }]);
+    const key = ["a", "b", "c"][variants.length] ?? String(variants.length);
+    setVariants((vs) => [
+      ...vs,
+      { key, name: VARIANT_NAMES[vs.length] ?? `Variant ${vs.length + 1}`, source: "", file: "" },
+    ]);
   }
 
   function removeVariant(key: string) {
     if (variants.length <= 2) return;
     setVariants((vs) =>
-      vs.filter((v) => v.key !== key).map((v, i) => ({ ...v, name: VARIANT_NAMES[i] })),
+      vs.filter((v) => v.key !== key).map((v, i) => ({ ...v, name: VARIANT_NAMES[i] ?? v.name })),
     );
   }
 

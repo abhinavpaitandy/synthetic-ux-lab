@@ -54,7 +54,7 @@ export function StatusBadge({ status }: { status: ExperimentStatus }) {
 
 export function ConfidenceBadge({ confidence }: { confidence: Confidence }) {
   const tone = confidence === "high" ? "success" : confidence === "medium" ? "warning" : "neutral";
-  const label = confidence[0].toUpperCase() + confidence.slice(1);
+  const label = confidence.charAt(0).toUpperCase() + confidence.slice(1);
   return <Pill tone={tone}>{label} confidence</Pill>;
 }
 
