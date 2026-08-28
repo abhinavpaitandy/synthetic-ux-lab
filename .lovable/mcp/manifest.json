@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "sdk_version": "0.28.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://epyrcxsiiutplglzfubf.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "synthetic-ux-lab",
+      "version": "0.1.0",
+      "title": "Synthetic UX Lab"
+    },
+    "tools": [
+      {
+        "name": "list_experiments",
+        "title": "List experiments",
+        "description": "List all synthetic UX pre-testing experiments with status, stage, simulation size and variant count.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_experiment",
+        "title": "Get experiment",
+        "description": "Get the full detail of one experiment: persona, task, variants, metrics, usability issues and behavioural segments.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "experiment_id": {
+              "type": "string",
+              "description": "The experiment id, e.g. from list_experiments."
+            }
+          },
+          "required": [
+            "experiment_id"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "compare_variants",
+        "title": "Compare variants",
+        "description": "Compare the simulated metrics of every variant in an experiment, with the recommended winner and rationale.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "experiment_id": {
+              "type": "string",
+              "description": "The experiment id to compare variants for."
+            }
+          },
+          "required": [
+            "experiment_id"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
