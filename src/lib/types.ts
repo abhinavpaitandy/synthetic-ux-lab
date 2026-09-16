@@ -55,7 +55,16 @@ export interface DetectedTarget {
   boundingBox: BoundingBox;
   /** 0–1 confidence score from the detection model */
   confidence: number;
+  /**
+   * Single source of truth for target review state.
+   * Do not maintain a separate boolean — use `isTargetReviewed()` to check.
+   */
   status: TargetStatus;
+}
+
+/** Returns true when the researcher has reviewed (confirmed or adjusted) the target. */
+export function isTargetReviewed(target: DetectedTarget): boolean {
+  return target.status === "confirmed" || target.status === "adjusted";
 }
 
 // ─── Variant ──────────────────────────────────────────────────────
@@ -66,7 +75,6 @@ export interface Variant {
   description?: string;
   screenshotUrl?: string;
   detectedTarget?: DetectedTarget;
-  targetConfirmed?: boolean;
 }
 
 export interface DraftVariant {
@@ -75,7 +83,6 @@ export interface DraftVariant {
   description?: string;
   screenshotUrl?: string;
   detectedTarget?: DetectedTarget;
-  targetConfirmed?: boolean;
 }
 
 // ─── Snapshot metrics ─────────────────────────────────────────────
@@ -325,4 +332,18 @@ export interface AdminSettings {
   population: PopulationSettings;
   evaluation: EvaluationSettings;
   features: FeatureFlags;
+}
+
+/**
+ * Patch model for partial nested updates.
+ * Each section is individually optional and its fields are partial,
+ * so callers can update a single field without supplying the whole section.
+ */
+export interface AdminSettingsPatch {
+  general?: Partial<GeneralSettings>;
+  ai?: Partial<AISettings>;
+  simulation?: Partial<SimulationSettings>;
+  population?: Partial<PopulationSettings>;
+  evaluation?: Partial<EvaluationSettings>;
+  features?: Partial<FeatureFlags>;
 }
