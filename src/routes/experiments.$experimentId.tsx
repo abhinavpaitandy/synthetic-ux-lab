@@ -12,6 +12,7 @@ import {
 } from "recharts";
 
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
+import { ExperimentStepper } from "@/components/experiment-stepper";
 import { ConfidenceBadge, Pill, StageBadge, StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,6 +95,11 @@ function ResultsPage() {
       />
 
       <PageBody>
+        <ExperimentStepper
+          currentStep={5}
+          experimentId={experiment.id}
+          className="mb-6"
+        />
         {experiment.results ? (
           <Results experiment={experiment} />
         ) : (

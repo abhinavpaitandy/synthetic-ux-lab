@@ -9,6 +9,7 @@
 export type ExperimentStatus = "draft" | "running" | "complete";
 export type Confidence = "high" | "medium" | "low";
 export type SimulationStage = "pilot" | "test";
+export type ExperimentType = "snapshot" | "flow";
 
 export interface VariantMetrics {
   taskSuccess: number; // %
@@ -47,6 +48,7 @@ export interface Experiment {
   id: string;
   name: string;
   status: ExperimentStatus;
+  type?: ExperimentType;
   stage: SimulationStage;
   simulationSize: number;
   updatedAt: string;
@@ -67,6 +69,15 @@ export interface Experiment {
 
 export const PILOT_SIZES = [100, 500, 1000] as const;
 export const TEST_SIZES = [10000, 100000, 1000000, 10000000] as const;
+
+export const EXPERIMENT_TYPES: {
+  value: ExperimentType;
+  label: string;
+  enabled: boolean;
+}[] = [
+  { value: "snapshot", label: "Snapshot / Decision Test", enabled: true },
+  { value: "flow", label: "Flow Test", enabled: false },
+];
 
 export const METRIC_DEFS: {
   key: keyof VariantMetrics;

@@ -10,18 +10,35 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAiRouteImport } from './routes/admin.ai'
+import { Route as AdminEvaluationRouteImport } from './routes/admin.evaluation'
+import { Route as AdminFeaturesRouteImport } from './routes/admin.features'
+import { Route as AdminGeneralRouteImport } from './routes/admin.general'
+import { Route as AdminPopulationRouteImport } from './routes/admin.population'
+import { Route as AdminStatusRouteImport } from './routes/admin.status'
 import { Route as ExperimentsExperimentIdRouteImport } from './routes/experiments.$experimentId'
 import { Route as ExperimentsNewRouteImport } from './routes/experiments.new'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as ExperimentsNewIndexRouteImport } from './routes/experiments.new.index'
+import { Route as ExperimentsNewSimulationRouteImport } from './routes/experiments.new.simulation'
+import { Route as ExperimentsNewTargetsRouteImport } from './routes/experiments.new.targets'
+import { Route as ExperimentsNewVariantsRouteImport } from './routes/experiments.new.variants'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -46,6 +63,41 @@ const Char91DotwellKnownChar93OauthProtectedResourceRoute =
     path: '/.well-known/oauth-protected-resource',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAiRoute = AdminAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminEvaluationRoute = AdminEvaluationRouteImport.update({
+  id: '/evaluation',
+  path: '/evaluation',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminFeaturesRoute = AdminFeaturesRouteImport.update({
+  id: '/features',
+  path: '/features',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminGeneralRoute = AdminGeneralRouteImport.update({
+  id: '/general',
+  path: '/general',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPopulationRoute = AdminPopulationRouteImport.update({
+  id: '/population',
+  path: '/population',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminStatusRoute = AdminStatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ExperimentsExperimentIdRoute = ExperimentsExperimentIdRouteImport.update({
   id: '/experiments/$experimentId',
   path: '/experiments/$experimentId',
@@ -67,17 +119,50 @@ const Char91DotmcpChar93InvokeToolToolRoute =
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ExperimentsNewIndexRoute = ExperimentsNewIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ExperimentsNewRoute,
+} as any)
+const ExperimentsNewSimulationRoute =
+  ExperimentsNewSimulationRouteImport.update({
+    id: '/simulation',
+    path: '/simulation',
+    getParentRoute: () => ExperimentsNewRoute,
+  } as any)
+const ExperimentsNewTargetsRoute = ExperimentsNewTargetsRouteImport.update({
+  id: '/targets',
+  path: '/targets',
+  getParentRoute: () => ExperimentsNewRoute,
+} as any)
+const ExperimentsNewVariantsRoute = ExperimentsNewVariantsRouteImport.update({
+  id: '/variants',
+  path: '/variants',
+  getParentRoute: () => ExperimentsNewRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/evaluation': typeof AdminEvaluationRoute
+  '/admin/features': typeof AdminFeaturesRoute
+  '/admin/general': typeof AdminGeneralRoute
+  '/admin/population': typeof AdminPopulationRoute
+  '/admin/status': typeof AdminStatusRoute
   '/experiments/$experimentId': typeof ExperimentsExperimentIdRoute
-  '/experiments/new': typeof ExperimentsNewRoute
+  '/experiments/new': typeof ExperimentsNewRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/experiments/new/simulation': typeof ExperimentsNewSimulationRoute
+  '/experiments/new/targets': typeof ExperimentsNewTargetsRoute
+  '/experiments/new/variants': typeof ExperimentsNewVariantsRoute
+  '/experiments/new/': typeof ExperimentsNewIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -85,35 +170,69 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/evaluation': typeof AdminEvaluationRoute
+  '/admin/features': typeof AdminFeaturesRoute
+  '/admin/general': typeof AdminGeneralRoute
+  '/admin/population': typeof AdminPopulationRoute
+  '/admin/status': typeof AdminStatusRoute
   '/experiments/$experimentId': typeof ExperimentsExperimentIdRoute
-  '/experiments/new': typeof ExperimentsNewRoute
+  '/admin': typeof AdminIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/experiments/new/simulation': typeof ExperimentsNewSimulationRoute
+  '/experiments/new/targets': typeof ExperimentsNewTargetsRoute
+  '/experiments/new/variants': typeof ExperimentsNewVariantsRoute
+  '/experiments/new': typeof ExperimentsNewIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/admin/ai': typeof AdminAiRoute
+  '/admin/evaluation': typeof AdminEvaluationRoute
+  '/admin/features': typeof AdminFeaturesRoute
+  '/admin/general': typeof AdminGeneralRoute
+  '/admin/population': typeof AdminPopulationRoute
+  '/admin/status': typeof AdminStatusRoute
   '/experiments/$experimentId': typeof ExperimentsExperimentIdRoute
-  '/experiments/new': typeof ExperimentsNewRoute
+  '/experiments/new': typeof ExperimentsNewRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/experiments/new/simulation': typeof ExperimentsNewSimulationRoute
+  '/experiments/new/targets': typeof ExperimentsNewTargetsRoute
+  '/experiments/new/variants': typeof ExperimentsNewVariantsRoute
+  '/experiments/new/': typeof ExperimentsNewIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/login'
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/ai'
+    | '/admin/evaluation'
+    | '/admin/features'
+    | '/admin/general'
+    | '/admin/population'
+    | '/admin/status'
     | '/experiments/$experimentId'
     | '/experiments/new'
+    | '/admin/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/experiments/new/simulation'
+    | '/experiments/new/targets'
+    | '/experiments/new/variants'
+    | '/experiments/new/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -121,31 +240,54 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/ai'
+    | '/admin/evaluation'
+    | '/admin/features'
+    | '/admin/general'
+    | '/admin/population'
+    | '/admin/status'
     | '/experiments/$experimentId'
-    | '/experiments/new'
+    | '/admin'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/experiments/new/simulation'
+    | '/experiments/new/targets'
+    | '/experiments/new/variants'
+    | '/experiments/new'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/login'
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/admin/ai'
+    | '/admin/evaluation'
+    | '/admin/features'
+    | '/admin/general'
+    | '/admin/population'
+    | '/admin/status'
     | '/experiments/$experimentId'
     | '/experiments/new'
+    | '/admin/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/experiments/new/simulation'
+    | '/experiments/new/targets'
+    | '/experiments/new/variants'
+    | '/experiments/new/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   LoginRoute: typeof LoginRoute
   McpRoute: typeof McpRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ExperimentsExperimentIdRoute: typeof ExperimentsExperimentIdRoute
-  ExperimentsNewRoute: typeof ExperimentsNewRoute
+  ExperimentsNewRoute: typeof ExperimentsNewRouteWithChildren
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
 }
@@ -157,6 +299,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -187,6 +336,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/ai': {
+      id: '/admin/ai'
+      path: '/ai'
+      fullPath: '/admin/ai'
+      preLoaderRoute: typeof AdminAiRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/evaluation': {
+      id: '/admin/evaluation'
+      path: '/evaluation'
+      fullPath: '/admin/evaluation'
+      preLoaderRoute: typeof AdminEvaluationRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/features': {
+      id: '/admin/features'
+      path: '/features'
+      fullPath: '/admin/features'
+      preLoaderRoute: typeof AdminFeaturesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/general': {
+      id: '/admin/general'
+      path: '/general'
+      fullPath: '/admin/general'
+      preLoaderRoute: typeof AdminGeneralRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/population': {
+      id: '/admin/population'
+      path: '/population'
+      fullPath: '/admin/population'
+      preLoaderRoute: typeof AdminPopulationRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/status': {
+      id: '/admin/status'
+      path: '/status'
+      fullPath: '/admin/status'
+      preLoaderRoute: typeof AdminStatusRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/experiments/$experimentId': {
       id: '/experiments/$experimentId'
       path: '/experiments/$experimentId'
@@ -215,18 +413,87 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/experiments/new/': {
+      id: '/experiments/new/'
+      path: '/'
+      fullPath: '/experiments/new/'
+      preLoaderRoute: typeof ExperimentsNewIndexRouteImport
+      parentRoute: typeof ExperimentsNewRoute
+    }
+    '/experiments/new/simulation': {
+      id: '/experiments/new/simulation'
+      path: '/simulation'
+      fullPath: '/experiments/new/simulation'
+      preLoaderRoute: typeof ExperimentsNewSimulationRouteImport
+      parentRoute: typeof ExperimentsNewRoute
+    }
+    '/experiments/new/targets': {
+      id: '/experiments/new/targets'
+      path: '/targets'
+      fullPath: '/experiments/new/targets'
+      preLoaderRoute: typeof ExperimentsNewTargetsRouteImport
+      parentRoute: typeof ExperimentsNewRoute
+    }
+    '/experiments/new/variants': {
+      id: '/experiments/new/variants'
+      path: '/variants'
+      fullPath: '/experiments/new/variants'
+      preLoaderRoute: typeof ExperimentsNewVariantsRouteImport
+      parentRoute: typeof ExperimentsNewRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminAiRoute: typeof AdminAiRoute
+  AdminEvaluationRoute: typeof AdminEvaluationRoute
+  AdminFeaturesRoute: typeof AdminFeaturesRoute
+  AdminGeneralRoute: typeof AdminGeneralRoute
+  AdminPopulationRoute: typeof AdminPopulationRoute
+  AdminStatusRoute: typeof AdminStatusRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAiRoute: AdminAiRoute,
+  AdminEvaluationRoute: AdminEvaluationRoute,
+  AdminFeaturesRoute: AdminFeaturesRoute,
+  AdminGeneralRoute: AdminGeneralRoute,
+  AdminPopulationRoute: AdminPopulationRoute,
+  AdminStatusRoute: AdminStatusRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface ExperimentsNewRouteChildren {
+  ExperimentsNewSimulationRoute: typeof ExperimentsNewSimulationRoute
+  ExperimentsNewTargetsRoute: typeof ExperimentsNewTargetsRoute
+  ExperimentsNewVariantsRoute: typeof ExperimentsNewVariantsRoute
+  ExperimentsNewIndexRoute: typeof ExperimentsNewIndexRoute
+}
+
+const ExperimentsNewRouteChildren: ExperimentsNewRouteChildren = {
+  ExperimentsNewSimulationRoute: ExperimentsNewSimulationRoute,
+  ExperimentsNewTargetsRoute: ExperimentsNewTargetsRoute,
+  ExperimentsNewVariantsRoute: ExperimentsNewVariantsRoute,
+  ExperimentsNewIndexRoute: ExperimentsNewIndexRoute,
+}
+
+const ExperimentsNewRouteWithChildren = ExperimentsNewRoute._addFileChildren(
+  ExperimentsNewRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   LoginRoute: LoginRoute,
   McpRoute: McpRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ExperimentsExperimentIdRoute: ExperimentsExperimentIdRoute,
-  ExperimentsNewRoute: ExperimentsNewRoute,
+  ExperimentsNewRoute: ExperimentsNewRouteWithChildren,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
 }
