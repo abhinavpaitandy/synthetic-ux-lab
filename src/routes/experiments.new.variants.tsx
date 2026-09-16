@@ -44,7 +44,7 @@ function VariantUploadPage() {
     setIsAnalysing(true);
     setTimeout(() => {
       variants.forEach((variant, index) => {
-        const target = generateMockTarget(variant, index, draft.successEvent);
+        const target = generateMockTarget(index, draft.successEvent);
         setDetectedTarget(variant.id, target);
       });
       navigate({ to: "/experiments/new/targets" });

@@ -12,6 +12,7 @@ import type {
   ExperimentDraft,
   DraftVariant,
   DetectedTarget,
+  BoundingBox,
   DeviceType,
   PilotSize,
   BehaviourDiversity,
@@ -52,6 +53,7 @@ type DraftAction =
   | { type: "REMOVE_VARIANT"; variantId: string }
   | { type: "SET_DETECTED_TARGET"; variantId: string; target: DetectedTarget }
   | { type: "SET_TARGET_STATUS"; variantId: string; status: TargetStatus }
+  | { type: "ADJUST_TARGET_BOX"; variantId: string; boundingBox: BoundingBox }
   | { type: "SET_PILOT_SIZE"; size: PilotSize }
   | { type: "SET_BEHAVIOUR_DIVERSITY"; diversity: BehaviourDiversity }
   | { type: "SET_DEVICE"; device: DeviceType }
@@ -118,6 +120,23 @@ function reducer(state: ExperimentDraft, action: DraftAction): ExperimentDraft {
         ),
       };
 
+    case "ADJUST_TARGET_BOX":
+      return {
+        ...state,
+        variants: state.variants.map((v) =>
+          v.id === action.variantId && v.detectedTarget
+            ? {
+                ...v,
+                detectedTarget: {
+                  ...v.detectedTarget,
+                  boundingBox: action.boundingBox,
+                  status: "adjusted",
+                },
+              }
+            : v,
+        ),
+      };
+
     case "SET_PILOT_SIZE":
       return { ...state, pilotSize: action.size };
 
@@ -150,7 +169,7 @@ interface DraftContextValue {
   removeVariant: (variantId: string) => void;
   setDetectedTarget: (variantId: string, target: DetectedTarget) => void;
   confirmTarget: (variantId: string) => void;
-  adjustTarget: (variantId: string) => void;
+  adjustTarget: (variantId: string, boundingBox: BoundingBox) => void;
   setPilotSize: (size: PilotSize) => void;
   setBehaviourDiversity: (diversity: BehaviourDiversity) => void;
   setDevice: (device: DeviceType) => void;
@@ -203,7 +222,8 @@ export function DraftProvider({ children }: { children: ReactNode }) {
   );
 
   const adjustTarget = useCallback(
-    (variantId: string) => dispatch({ type: "SET_TARGET_STATUS", variantId, status: "adjusted" }),
+    (variantId: string, boundingBox: BoundingBox) =>
+      dispatch({ type: "ADJUST_TARGET_BOX", variantId, boundingBox }),
     [],
   );
 
