@@ -15,6 +15,7 @@ import type {
   DeviceType,
   PilotSize,
   BehaviourDiversity,
+  TargetStatus,
 } from "./types";
 
 // ─── State ────────────────────────────────────────────────────────
@@ -24,23 +25,10 @@ const DEFAULT_DRAFT: ExperimentDraft = {
   persona: "",
   task: "",
   successEvent: "",
-  hypothesis: undefined,
   device: "mobile",
   variants: [
-    {
-      id: "v-a",
-      name: "Variant A",
-      description: "",
-      screenshotUrl: undefined,
-      targetConfirmed: false,
-    },
-    {
-      id: "v-b",
-      name: "Variant B",
-      description: "",
-      screenshotUrl: undefined,
-      targetConfirmed: false,
-    },
+    { id: "v-a", name: "Variant A", description: "" },
+    { id: "v-b", name: "Variant B", description: "" },
   ],
   pilotSize: 500,
   behaviourDiversity: "medium",
@@ -52,7 +40,10 @@ type DraftAction =
   | {
       type: "UPDATE_DETAILS";
       patch: Partial<
-        Pick<ExperimentDraft, "name" | "persona" | "task" | "successEvent" | "hypothesis" | "device">
+        Pick<
+          ExperimentDraft,
+          "name" | "persona" | "task" | "successEvent" | "hypothesis" | "device"
+        >
       >;
     }
   | { type: "SET_VARIANTS"; variants: DraftVariant[] }
@@ -60,7 +51,7 @@ type DraftAction =
   | { type: "ADD_VARIANT" }
   | { type: "REMOVE_VARIANT"; variantId: string }
   | { type: "SET_DETECTED_TARGET"; variantId: string; target: DetectedTarget }
-  | { type: "CONFIRM_TARGET"; variantId: string; confirmed: boolean }
+  | { type: "SET_TARGET_STATUS"; variantId: string; status: TargetStatus }
   | { type: "SET_PILOT_SIZE"; size: PilotSize }
   | { type: "SET_BEHAVIOUR_DIVERSITY"; diversity: BehaviourDiversity }
   | { type: "SET_DEVICE"; device: DeviceType }
@@ -94,12 +85,7 @@ function reducer(state: ExperimentDraft, action: DraftAction): ExperimentDraft {
         ...state,
         variants: [
           ...state.variants,
-          {
-            id,
-            name: VARIANT_NAMES[idx] ?? `Variant ${idx + 1}`,
-            description: "",
-            targetConfirmed: false,
-          },
+          { id, name: VARIANT_NAMES[idx] ?? `Variant ${idx + 1}`, description: "" },
         ],
       };
     }
@@ -122,11 +108,13 @@ function reducer(state: ExperimentDraft, action: DraftAction): ExperimentDraft {
         ),
       };
 
-    case "CONFIRM_TARGET":
+    case "SET_TARGET_STATUS":
       return {
         ...state,
         variants: state.variants.map((v) =>
-          v.id === action.variantId ? { ...v, targetConfirmed: action.confirmed } : v,
+          v.id === action.variantId && v.detectedTarget
+            ? { ...v, detectedTarget: { ...v.detectedTarget, status: action.status } }
+            : v,
         ),
       };
 
@@ -161,7 +149,8 @@ interface DraftContextValue {
   addVariant: () => void;
   removeVariant: (variantId: string) => void;
   setDetectedTarget: (variantId: string, target: DetectedTarget) => void;
-  confirmTarget: (variantId: string, confirmed: boolean) => void;
+  confirmTarget: (variantId: string) => void;
+  adjustTarget: (variantId: string) => void;
   setPilotSize: (size: PilotSize) => void;
   setBehaviourDiversity: (diversity: BehaviourDiversity) => void;
   setDevice: (device: DeviceType) => void;
@@ -176,7 +165,10 @@ export function DraftProvider({ children }: { children: ReactNode }) {
   const updateExperimentDetails = useCallback(
     (
       patch: Partial<
-        Pick<ExperimentDraft, "name" | "persona" | "task" | "successEvent" | "hypothesis" | "device">
+        Pick<
+          ExperimentDraft,
+          "name" | "persona" | "task" | "successEvent" | "hypothesis" | "device"
+        >
       >,
     ) => dispatch({ type: "UPDATE_DETAILS", patch }),
     [],
@@ -206,17 +198,27 @@ export function DraftProvider({ children }: { children: ReactNode }) {
   );
 
   const confirmTarget = useCallback(
-    (variantId: string, confirmed: boolean) =>
-      dispatch({ type: "CONFIRM_TARGET", variantId, confirmed }),
+    (variantId: string) => dispatch({ type: "SET_TARGET_STATUS", variantId, status: "confirmed" }),
     [],
   );
 
-  const setPilotSize = useCallback((size: PilotSize) => dispatch({ type: "SET_PILOT_SIZE", size }), []);
+  const adjustTarget = useCallback(
+    (variantId: string) => dispatch({ type: "SET_TARGET_STATUS", variantId, status: "adjusted" }),
+    [],
+  );
+
+  const setPilotSize = useCallback(
+    (size: PilotSize) => dispatch({ type: "SET_PILOT_SIZE", size }),
+    [],
+  );
   const setBehaviourDiversity = useCallback(
     (diversity: BehaviourDiversity) => dispatch({ type: "SET_BEHAVIOUR_DIVERSITY", diversity }),
     [],
   );
-  const setDevice = useCallback((device: DeviceType) => dispatch({ type: "SET_DEVICE", device }), []);
+  const setDevice = useCallback(
+    (device: DeviceType) => dispatch({ type: "SET_DEVICE", device }),
+    [],
+  );
   const resetDraft = useCallback(() => dispatch({ type: "RESET" }), []);
 
   const value = useMemo(
@@ -229,6 +231,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       removeVariant,
       setDetectedTarget,
       confirmTarget,
+      adjustTarget,
       setPilotSize,
       setBehaviourDiversity,
       setDevice,
@@ -243,6 +246,7 @@ export function DraftProvider({ children }: { children: ReactNode }) {
       removeVariant,
       setDetectedTarget,
       confirmTarget,
+      adjustTarget,
       setPilotSize,
       setBehaviourDiversity,
       setDevice,
