@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Plus } from "lucide-react";
 
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
-import { StatusBadge, Pill } from "@/components/status-badge";
+import { EvidenceBadge, StatusBadge, Pill } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -12,11 +12,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { EvidenceConfidence, ExperimentType } from "@/lib/mock-data";
 import { formatCount, formatDate, listExperiments } from "@/lib/mock-data";
 
 const TITLE = "Experiments — Synthetic UX Lab";
 const DESCRIPTION =
-  "Simulate user journeys across competing designs to identify likely usability problems and promising variants before human validation.";
+  "Compare competing UI designs using synthetic behavioural simulations before human validation.";
+
+const TYPE_LABEL: Record<ExperimentType, string> = {
+  snapshot: "Snapshot",
+  flow: "Future",
+};
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,20 +41,17 @@ export const Route = createFileRoute("/")({
 function ExperimentsPage() {
   const experiments = listExperiments();
 
+  const runningCount = experiments.filter((e) => e.status === "running").length;
+  const sessionsCount = experiments
+    .filter((e) => e.status === "running" || e.status === "complete")
+    .reduce((sum, e) => sum + e.pilotSize, 0);
+  const resultsReadyCount = experiments.filter((e) => e.snapshotResults).length;
+
   const summary = [
     { label: "Experiments", value: String(experiments.length) },
-    {
-      label: "Running",
-      value: String(experiments.filter((e) => e.status === "running").length),
-    },
-    {
-      label: "Simulations this month",
-      value: formatCount(experiments.reduce((sum, e) => sum + e.simulationSize, 0)),
-    },
-    {
-      label: "Results ready",
-      value: String(experiments.filter((e) => e.results).length),
-    },
+    { label: "Running", value: String(runningCount) },
+    { label: "Synthetic sessions", value: formatCount(sessionsCount) },
+    { label: "Results ready", value: String(resultsReadyCount) },
   ];
 
   return (
@@ -61,7 +64,7 @@ function ExperimentsPage() {
           <Button asChild>
             <Link to="/experiments/new">
               <Plus className="size-4" />
-              New experiment
+              New Experiment
             </Link>
           </Button>
         }
@@ -86,79 +89,97 @@ function ExperimentsPage() {
           {experiments.length === 0 ? (
             <EmptyState />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-5">Experiment</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Variants</TableHead>
-                  <TableHead className="text-right">Simulation size</TableHead>
-                  <TableHead>Predicted winner</TableHead>
-                  <TableHead className="text-right">Updated</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {experiments.map((exp) => {
-                  const winner = exp.results
-                    ? exp.variants.find((v) => v.id === exp.results!.winnerVariantId)
-                    : undefined;
-                  return (
-                    <TableRow key={exp.id} className="group">
-                      <TableCell className="pl-5">
-                        <Link
-                          to="/experiments/$experimentId"
-                          params={{ experimentId: exp.id }}
-                          className="font-medium text-foreground hover:text-primary"
-                        >
-                          {exp.name}
-                        </Link>
-                        <div className="tabular mt-0.5 text-xs text-muted-foreground">
-                          {exp.id} · {exp.owner}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={exp.status} />
-                      </TableCell>
-                      <TableCell className="tabular text-right">{exp.variants.length}</TableCell>
-                      <TableCell className="tabular text-right">
-                        <span className="text-foreground">{formatCount(exp.simulationSize)}</span>
-                        <span className="ml-1.5 text-xs text-muted-foreground capitalize">
-                          {exp.stage}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {winner ? (
-                          <Pill tone="accent">{winner.name}</Pill>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="tabular text-right text-sm text-muted-foreground">
-                        {formatDate(exp.updatedAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Link
-                          to="/experiments/$experimentId"
-                          params={{ experimentId: exp.id }}
-                          aria-label={`Open ${exp.name}`}
-                          className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                        >
-                          <ArrowRight className="size-4" />
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="pl-5">Experiment</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Variants</TableHead>
+                    <TableHead className="text-right">Pilot size</TableHead>
+                    <TableHead>Predicted winner</TableHead>
+                    <TableHead>Evidence</TableHead>
+                    <TableHead className="text-right">Updated</TableHead>
+                    <TableHead className="w-10" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {experiments.map((exp) => {
+                    const snapshot = exp.snapshotResults;
+                    const winnerVariant = snapshot?.predictedWinnerVariantId
+                      ? exp.variants.find((v) => v.id === snapshot.predictedWinnerVariantId)
+                      : undefined;
+                    const evidence: EvidenceConfidence | undefined = snapshot?.evidenceConfidence;
+                    const isComplete = exp.status === "complete";
+
+                    return (
+                      <TableRow key={exp.id} className="group">
+                        <TableCell className="pl-5">
+                          <Link
+                            to="/experiments/$experimentId"
+                            params={{ experimentId: exp.id }}
+                            className="font-medium text-foreground hover:text-primary"
+                          >
+                            {exp.name}
+                          </Link>
+                          <div className="tabular mt-0.5 text-xs text-muted-foreground">
+                            {exp.id}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={exp.status} />
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">
+                            {TYPE_LABEL[exp.type]}
+                          </span>
+                        </TableCell>
+                        <TableCell className="tabular text-right">{exp.variants.length}</TableCell>
+                        <TableCell className="tabular text-right">
+                          <span className="text-foreground">{formatCount(exp.pilotSize)}</span>
+                        </TableCell>
+                        <TableCell>
+                          {isComplete && snapshot && !snapshot.predictedWinnerVariantId ? (
+                            <span className="text-sm text-muted-foreground">No clear winner</span>
+                          ) : winnerVariant ? (
+                            <Pill tone="accent">{winnerVariant.name}</Pill>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {evidence ? (
+                            <EvidenceBadge confidence={evidence} />
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="tabular text-right text-sm text-muted-foreground">
+                          {formatDate(exp.updatedAt)}
+                        </TableCell>
+                        <TableCell>
+                          <Link
+                            to="/experiments/$experimentId"
+                            params={{ experimentId: exp.id }}
+                            aria-label={`Open ${exp.name}`}
+                            className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                          >
+                            <ArrowRight className="size-4" />
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </section>
 
         <p className="mt-6 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-          Synthetic simulations are a pre-testing signal. Use them to prioritise which variants and
-          usability risks deserve human validation — not as a substitute for real users or
-          usability research.
+          Synthetic simulations are a pre-testing signal used to prioritise what should be validated
+          with real users. They are not a substitute for usability research.
         </p>
       </PageBody>
     </AppShell>
@@ -170,13 +191,13 @@ function EmptyState() {
     <div className="px-6 py-16 text-center">
       <h3 className="text-sm font-semibold text-foreground">No experiments yet</h3>
       <p className="mx-auto mt-1.5 max-w-sm text-sm text-muted-foreground">
-        Create your first experiment to compare two or three interface variants with synthetic user
-        simulations.
+        Create your first Snapshot experiment to compare competing interface variants before human
+        validation.
       </p>
       <Button asChild className="mt-5">
         <Link to="/experiments/new">
           <Plus className="size-4" />
-          New experiment
+          New Experiment
         </Link>
       </Button>
     </div>
