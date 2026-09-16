@@ -6,7 +6,6 @@ import { TargetOverlayPreview } from "@/components/target-overlay-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import { isTargetReviewed, type BoundingBox, type DraftVariant } from "@/lib/types";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -56,12 +55,20 @@ export function TargetReviewCard({ variant, onConfirm, onAdjust }: TargetReviewC
     setAdjustMode(false);
   }
 
+  const [drawError, setDrawError] = useState(false);
+
   function handleBoxChange(box: BoundingBox) {
     setDraftBox(box);
+    setDrawError(false);
   }
 
   function handleDrawEnd() {
     // Drawing completed — keep draftBox as-is, user clicks Save
+  }
+
+  function handleDrawCancel() {
+    setDraftBox(savedBox);
+    setDrawError(true);
   }
 
   function handlePercentChange(field: keyof BoundingBox, value: number) {
@@ -99,6 +106,7 @@ export function TargetReviewCard({ variant, onConfirm, onAdjust }: TargetReviewC
           adjustMode={adjustMode}
           onBoxChange={handleBoxChange}
           onDrawEnd={handleDrawEnd}
+          onDrawCancel={handleDrawCancel}
           alt={`${variant.name} screenshot with detected target overlay`}
         />
       </div>
@@ -132,27 +140,35 @@ export function TargetReviewCard({ variant, onConfirm, onAdjust }: TargetReviewC
           </p>
           <div className="grid grid-cols-4 gap-2">
             <PercentInput
+              idPrefix={`target-${variant.id}`}
               label="X"
               value={percentValues.x}
               onChange={(v) => handlePercentChange("x", v)}
             />
             <PercentInput
+              idPrefix={`target-${variant.id}`}
               label="Y"
               value={percentValues.y}
               onChange={(v) => handlePercentChange("y", v)}
             />
             <PercentInput
+              idPrefix={`target-${variant.id}`}
               label="Width"
               value={percentValues.width}
               onChange={(v) => handlePercentChange("width", v)}
             />
             <PercentInput
+              idPrefix={`target-${variant.id}`}
               label="Height"
               value={percentValues.height}
               onChange={(v) => handlePercentChange("height", v)}
             />
           </div>
-          {percentValues.width < MIN_PERCENT || percentValues.height < MIN_PERCENT ? (
+          {drawError ? (
+            <p role="alert" className="text-xs text-destructive">
+              Target area is too small. Draw a larger area.
+            </p>
+          ) : percentValues.width < MIN_PERCENT || percentValues.height < MIN_PERCENT ? (
             <p role="alert" className="text-xs text-destructive">
               Target area is too small. Increase width and height.
             </p>
@@ -203,15 +219,18 @@ export function TargetReviewCard({ variant, onConfirm, onAdjust }: TargetReviewC
 }
 
 function PercentInput({
+  idPrefix,
   label,
   value,
   onChange,
 }: {
+  idPrefix: string;
   label: string;
   value: number;
   onChange: (value: number) => void;
 }) {
-  const inputId = `percent-${label}`;
+  const fieldKey = label.toLowerCase();
+  const inputId = `${idPrefix}-${fieldKey}`;
   return (
     <div>
       <Label htmlFor={inputId} className="mb-1 block text-xs text-muted-foreground">
