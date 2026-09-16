@@ -80,9 +80,9 @@ export interface Variant {
 export interface DraftVariant {
   id: string;
   name: string;
-  description?: string;
-  screenshotUrl?: string;
-  detectedTarget?: DetectedTarget;
+  description?: string | undefined;
+  screenshotUrl?: string | undefined;
+  detectedTarget?: DetectedTarget | undefined;
 }
 
 // ─── Snapshot metrics ─────────────────────────────────────────────
