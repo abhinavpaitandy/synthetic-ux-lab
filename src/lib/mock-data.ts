@@ -13,7 +13,6 @@
 import type {
   Experiment as CleanExperiment,
   ExperimentType,
-  ExperimentStatus,
   EvidenceConfidence,
   SnapshotVariantMetrics,
   SnapshotExperimentResults,
@@ -28,6 +27,7 @@ import type {
 
 export type {
   ExperimentType,
+  ExperimentStatus,
   EvidenceConfidence,
   SnapshotVariantMetrics,
   SnapshotExperimentResults,
@@ -38,6 +38,8 @@ export type {
   DeviceType,
   PilotSize,
   BehaviourDiversity,
+  TargetStatus,
+  isTargetReviewed,
 } from "./types";
 
 // ─── Legacy aliases (kept for backwards compatibility) ───────────
@@ -75,6 +77,19 @@ export interface BehaviouralSegment {
   bestVariantId: string;
 }
 
+/**
+ * Legacy results shape consumed by the current Results screen and MCP tools.
+ * New code should use `SnapshotExperimentResults` instead.
+ */
+export interface LegacyExperimentResults {
+  winnerVariantId: string;
+  confidence: Confidence;
+  rationale: string;
+  recommendation: string;
+  issues: UsabilityIssue[];
+  segments: BehaviouralSegment[];
+}
+
 // ─── Extended Variant with both new and legacy fields ─────────────
 
 export interface Variant {
@@ -84,9 +99,13 @@ export interface Variant {
   source: string;
   /** New: screenshot URL for snapshot experiments */
   screenshotUrl?: string;
-  /** New: AI-detected interaction target */
+  /** New: AI-detected interaction target (status is the single source of truth) */
   detectedTarget?: DetectedTarget;
-  /** New: whether the researcher confirmed the detected target */
+  /**
+   * Legacy: whether the researcher confirmed the detected target.
+   * Kept only for backwards compatibility with existing screens.
+   * New code should use `detectedTarget.status` + `isTargetReviewed()`.
+   */
   targetConfirmed?: boolean;
   /** Legacy: flow-test metrics (future capability) */
   metrics?: VariantMetrics;
@@ -94,7 +113,14 @@ export interface Variant {
 
 // ─── Extended Experiment with both new and legacy fields ──────────
 
-export interface Experiment extends Omit<CleanExperiment, "variants"> {
+/**
+ * Compatibility experiment that omits BOTH `variants` and `results` from the
+ * clean model, then introduces legacy equivalents.
+ *
+ * `snapshotResults` = current Snapshot MVP model
+ * `results` = temporary legacy Flow-style compatibility field
+ */
+export interface Experiment extends Omit<CleanExperiment, "variants" | "results"> {
   /** Legacy: used by Dashboard and Results until migrated */
   simulationSize: number;
   /** Legacy: used by Dashboard and Results until migrated */
@@ -105,18 +131,8 @@ export interface Experiment extends Omit<CleanExperiment, "variants"> {
   successCriteria: string;
   /** Override variants to use the extended Variant type */
   variants: Variant[];
-  /**
-   * Legacy results shape. New code should use `snapshotResults` instead.
-   * Kept so the current Results screen and MCP tools keep working.
-   */
-  results?: {
-    winnerVariantId: string;
-    confidence: Confidence;
-    rationale: string;
-    recommendation: string;
-    issues: UsabilityIssue[];
-    segments: BehaviouralSegment[];
-  };
+  /** Legacy results shape — current Results screen and MCP tools */
+  results?: LegacyExperimentResults;
   /** New: clean snapshot results */
   snapshotResults?: SnapshotExperimentResults;
 }
@@ -190,39 +206,37 @@ export const METRIC_DEFS: {
 //
 // Five experiments covering: complete (high), complete (medium),
 // complete (inconclusive), running, draft.
+// Each represents ONE screen + ONE decision point + ONE expected first action.
 
 // 1. Completed — High evidence, 3 variants, winner = B
-const checkoutExperiment: Experiment = {
+const deliveryExperiment: Experiment = {
   id: "exp-1042",
-  name: "Checkout — one-page vs. stepped flow",
+  name: "Delivery option discoverability",
   type: "snapshot",
   status: "complete",
-  persona:
-    "First-time buyer on mobile, moderate digital confidence, shopping during a work break and easily distracted.",
-  task: "Purchase a single in-stock item using a saved address and a new payment card.",
-  successEvent: "Order confirmation reached with no validation error on the payment step.",
+  persona: "Frequent mobile fashion shopper. Digitally confident and values speed and convenience.",
+  task: "Choose the fastest available delivery option.",
+  successEvent: "Express Delivery is selected.",
   hypothesis:
-    "A single-page checkout with inline validation will reduce confusion and no-action rates compared to a stepped flow.",
+    "Making Express Delivery visually prominent with a clear badge will reduce confusion and no-action rates.",
   device: "mobile",
   pilotSize: 1000,
   behaviourDiversity: "high",
   createdAt: "2026-08-20T10:00:00Z",
   updatedAt: "2026-08-27T14:20:00Z",
-  // Legacy
   simulationSize: 1000,
   stage: "pilot",
   owner: "Nadia Okafor",
-  successCriteria:
-    "Order confirmation reached in under 6 steps with no validation error on the payment step.",
+  successCriteria: "Express Delivery is selected on the first interaction.",
   variants: [
     {
       id: "v-a",
       name: "Variant A",
-      description: "Current production checkout — three separate steps with a progress bar.",
-      source: "https://shop.internal/checkout",
-      screenshotUrl: "mock://checkout-stepped.png",
+      description: "Delivery options listed in a standard radio group with no visual emphasis.",
+      source: "delivery-radio-group.png",
+      screenshotUrl: "mock://delivery-radio-group.png",
       detectedTarget: {
-        label: "Continue to payment",
+        label: "Express Delivery",
         boundingBox: { x: 0.35, y: 0.72, width: 0.3, height: 0.06 },
         confidence: 0.92,
         status: "confirmed",
@@ -240,11 +254,11 @@ const checkoutExperiment: Experiment = {
     {
       id: "v-b",
       name: "Variant B",
-      description: "Single-page checkout with inline validation and a persistent order summary.",
-      source: "checkout-single-page-v3.png",
-      screenshotUrl: "mock://checkout-single-page.png",
+      description: "Express Delivery highlighted with a bold badge and distinct background colour.",
+      source: "delivery-badge.png",
+      screenshotUrl: "mock://delivery-badge.png",
       detectedTarget: {
-        label: "Place order",
+        label: "Express Delivery",
         boundingBox: { x: 0.3, y: 0.85, width: 0.4, height: 0.07 },
         confidence: 0.96,
         status: "confirmed",
@@ -262,11 +276,11 @@ const checkoutExperiment: Experiment = {
     {
       id: "v-c",
       name: "Variant C",
-      description: "Accordion checkout with a sticky pay button and deferred address entry.",
-      source: "checkout-accordion-v1.png",
-      screenshotUrl: "mock://checkout-accordion.png",
+      description: "Delivery options in a card layout with Express Delivery expanded by default.",
+      source: "delivery-cards.png",
+      screenshotUrl: "mock://delivery-cards.png",
       detectedTarget: {
-        label: "Pay now",
+        label: "Express Delivery",
         boundingBox: { x: 0.28, y: 0.9, width: 0.44, height: 0.06 },
         confidence: 0.88,
         status: "confirmed",
@@ -282,53 +296,43 @@ const checkoutExperiment: Experiment = {
       },
     },
   ],
-  // Legacy results
   results: {
     winnerVariantId: "v-b",
     confidence: "high",
     rationale:
-      "Variant B removed the step transitions where simulated sessions most often lost context. With the order summary persistently visible, synthetic users re-checked totals in place instead of navigating backwards, which cut backtracking by roughly half against Variant A. Inline validation resolved card-entry errors before submission, lifting error-free sessions to 81.7%. Variant C recovered some of that benefit, but deferring address entry pushed a second decision point late in the flow and slowed the last third of the journey.",
+      "Variant B's bold badge made Express Delivery immediately identifiable, reducing confusion by 13pp and no-action by 6pp versus Variant A.",
     recommendation: "Take Variant B into human usability validation.",
     issues: [
       {
         id: "i-1",
         variantId: "v-a",
         severity: "high",
-        title: "Progress bar does not signal remaining effort",
+        title: "Express Delivery overlooked",
         detail:
-          "Simulated sessions frequently paused at step 2, then reversed to step 1 to confirm details they could no longer see.",
+          "Without visual emphasis, Express Delivery was not the first choice for 29% of sessions.",
       },
       {
         id: "i-2",
         variantId: "v-a",
         severity: "medium",
-        title: "Card errors surface only after submission",
+        title: "Standard Delivery mistaken for recommended option",
         detail:
-          "Post-submit validation produced repeated retry loops, concentrated in the low-familiarity segment.",
+          "The first-listed option (Standard) drew early clicks from users scanning top-to-bottom.",
       },
       {
         id: "i-3",
         variantId: "v-c",
         severity: "medium",
-        title: "Sticky pay button competes with unfinished sections",
-        detail:
-          "The always-visible primary action drew early clicks while required fields were still collapsed.",
+        title: "Label hierarchy causes ambiguity",
+        detail: "The expanded card's sub-labels competed with the primary delivery option label.",
       },
       {
         id: "i-4",
         variantId: "v-b",
         severity: "low",
-        title: "Promo code field attracts exploratory detours",
+        title: "Badge colour blends with promo banner",
         detail:
-          "A small share of hurried sessions opened the promo field, found nothing to enter, and stalled briefly.",
-      },
-      {
-        id: "i-5",
-        variantId: "v-c",
-        severity: "low",
-        title: "Deferred address entry reads as optional",
-        detail:
-          "Collapsed address section was skipped on first pass in about one in seven simulated sessions.",
+          "A small share of sessions first looked at the promo banner area before locating the delivery badge.",
       },
     ],
     segments: [
@@ -336,16 +340,14 @@ const checkoutExperiment: Experiment = {
         id: "s-1",
         name: "Hurried users",
         share: 31,
-        summary:
-          "Scan for the primary action and commit quickly. Punished by any step that hides the total.",
+        summary: "Scan for the most visually prominent option and commit quickly.",
         bestVariantId: "v-b",
       },
       {
         id: "s-2",
         name: "Cautious users",
         share: 26,
-        summary:
-          "Re-read summaries before committing. Benefit most from a persistent order summary.",
+        summary: "Re-read all labels before selecting. Benefit most from clear visual hierarchy.",
         bestVariantId: "v-b",
       },
       {
@@ -353,25 +355,23 @@ const checkoutExperiment: Experiment = {
         name: "Experienced users",
         share: 24,
         summary:
-          "Complete all variants successfully; differences show up mainly in interaction efficiency.",
+          "Identify Express by label regardless of layout; differences show in speed of identification.",
         bestVariantId: "v-b",
       },
       {
         id: "s-4",
         name: "Low-familiarity users",
         share: 19,
-        summary:
-          "Most sensitive to late-surfacing errors. Largest gap between Variant A and Variant B.",
+        summary: "Most sensitive to label ambiguity. Largest gap between Variant A and Variant B.",
         bestVariantId: "v-b",
       },
     ],
   },
-  // New snapshot results
   snapshotResults: {
     predictedWinnerVariantId: "v-b",
     evidenceConfidence: "high",
     primaryDifference:
-      "Variant B's inline validation and persistent order summary cut confusion by 13pp and no-action by 6pp versus Variant A.",
+      "Variant B's bold badge made Express Delivery immediately identifiable, reducing confusion by 13pp and no-action by 6pp versus Variant A.",
     recommendation: "Take Variant B into human usability validation.",
     variantMetrics: {
       "v-a": {
@@ -402,28 +402,28 @@ const checkoutExperiment: Experiment = {
         name: "Hurried",
         share: 31,
         variantScores: { "v-a": 62, "v-b": 90, "v-c": 74 },
-        summary: "Scan for the primary action and commit quickly.",
+        summary: "Scan for the most visually prominent option and commit quickly.",
       },
       {
         id: "c-2",
         name: "Cautious",
         share: 26,
         variantScores: { "v-a": 70, "v-b": 93, "v-c": 78 },
-        summary: "Re-read summaries before committing.",
+        summary: "Re-read all labels before selecting.",
       },
       {
         id: "c-3",
         name: "Experienced",
         share: 24,
         variantScores: { "v-a": 78, "v-b": 92, "v-c": 82 },
-        summary: "Complete all variants; differences in efficiency.",
+        summary: "Identify Express by label regardless of layout.",
       },
       {
         id: "c-4",
         name: "Low familiarity",
         share: 19,
         variantScores: { "v-a": 55, "v-b": 87, "v-c": 68 },
-        summary: "Most sensitive to late-surfacing errors.",
+        summary: "Most sensitive to label ambiguity.",
       },
     ],
     observedIssues: [
@@ -431,27 +431,27 @@ const checkoutExperiment: Experiment = {
         id: "oi-1",
         variantId: "v-a",
         severity: "high",
-        title: "Progress bar does not signal remaining effort",
+        title: "Express Delivery overlooked",
         description:
-          "Simulated sessions frequently paused at step 2, then reversed to step 1 to confirm details they could no longer see.",
+          "Without visual emphasis, Express Delivery was not the first choice for 29% of sessions.",
         affectedShare: 24,
       },
       {
         id: "oi-2",
         variantId: "v-a",
         severity: "medium",
-        title: "Card errors surface only after submission",
+        title: "Standard Delivery mistaken for recommended option",
         description:
-          "Post-submit validation produced repeated retry loops, concentrated in the low-familiarity cohort.",
+          "The first-listed option (Standard) drew early clicks from users scanning top-to-bottom.",
         affectedShare: 18,
       },
       {
         id: "oi-3",
         variantId: "v-c",
         severity: "medium",
-        title: "Sticky pay button competes with unfinished sections",
+        title: "Label hierarchy causes ambiguity",
         description:
-          "The always-visible primary action drew early clicks while required fields were still collapsed.",
+          "The expanded card's sub-labels competed with the primary delivery option label.",
         affectedShare: 15,
       },
     ],
@@ -480,20 +480,20 @@ const checkoutExperiment: Experiment = {
       ],
     },
     rationale:
-      "Variant B's single-page layout with inline validation reduced confusion by 13pp and no-action by 6pp versus Variant A. The persistent order summary let synthetic users verify totals in place rather than navigating back.",
+      "Variant B's bold badge made Express Delivery immediately identifiable, reducing confusion by 13pp and no-action by 6pp versus Variant A. The clear visual hierarchy meant synthetic agents rarely needed to re-scan the option list.",
   },
 };
 
 // 2. Completed — Medium evidence, 2 variants
 const navigationExperiment: Experiment = {
   id: "exp-1031",
-  name: "Reporting navigation — sidebar vs. top tabs",
+  name: "Reporting navigation discoverability",
   type: "snapshot",
   status: "complete",
   persona:
     "Internal analyst who visits the reporting area weekly and knows the metric names but not the page structure.",
-  task: "Locate the retention cohort report and export it as CSV.",
-  successEvent: "Export triggered on the correct report on the first attempt.",
+  task: "Choose the navigation item you would use to find the Retention Cohort report.",
+  successEvent: "Retention / Cohorts navigation target selected.",
   hypothesis:
     "A persistent sidebar will outperform top tabs for discoverability of secondary reports.",
   device: "desktop",
@@ -501,11 +501,10 @@ const navigationExperiment: Experiment = {
   behaviourDiversity: "medium",
   createdAt: "2026-08-15T09:00:00Z",
   updatedAt: "2026-08-21T16:42:00Z",
-  // Legacy
   simulationSize: 100,
   stage: "pilot",
   owner: "Nadia Okafor",
-  successCriteria: "Export triggered within 90 simulated seconds.",
+  successCriteria: "Retention / Cohorts navigation target selected on the first interaction.",
   variants: [
     {
       id: "v-a",
@@ -514,7 +513,7 @@ const navigationExperiment: Experiment = {
       source: "reporting-sidebar.png",
       screenshotUrl: "mock://reporting-sidebar.png",
       detectedTarget: {
-        label: "Retention cohort",
+        label: "Retention / Cohorts",
         boundingBox: { x: 0.05, y: 0.4, width: 0.18, height: 0.04 },
         confidence: 0.91,
         status: "confirmed",
@@ -552,12 +551,11 @@ const navigationExperiment: Experiment = {
       },
     },
   ],
-  // Legacy results
   results: {
     winnerVariantId: "v-a",
     confidence: "medium",
     rationale:
-      "The sidebar kept every report category visible, so simulated sessions selected the correct group on the first attempt far more often. In Variant B the cohort report sat behind an overflow menu, and sessions that missed it on the first scan tended to sweep the tab bar repeatedly before recovering. Confidence is medium because the pilot ran at 100 simulations and the two variants overlap on error-free sessions.",
+      "The sidebar kept every report category visible, so the Retention / Cohorts target was identified on the first scan far more often. In Variant B the target sat behind an overflow menu, and agents that missed it on the first scan struggled to locate it.",
     recommendation:
       "Re-run Variant A and B at 1,000 simulations before scheduling human validation.",
     issues: [
@@ -565,8 +563,8 @@ const navigationExperiment: Experiment = {
         id: "i-1",
         variantId: "v-b",
         severity: "high",
-        title: "Overflow menu hides a high-intent report",
-        detail: "Cohort report was reached on the first attempt in only 52% of sessions.",
+        title: "Overflow menu hides the target",
+        detail: "Retention / Cohorts was identified on the first attempt in only 52% of sessions.",
       },
       {
         id: "i-2",
@@ -579,8 +577,9 @@ const navigationExperiment: Experiment = {
         id: "i-3",
         variantId: "v-a",
         severity: "low",
-        title: "Export control sits below the fold",
-        detail: "A minority of sessions scrolled past the export action before finding it.",
+        title: "Cohorts label partially obscured",
+        detail:
+          "A minority of sessions initially looked at the 'Reports' group header before locating 'Cohorts'.",
       },
     ],
     segments: [
@@ -595,24 +594,23 @@ const navigationExperiment: Experiment = {
         id: "s-2",
         name: "Experienced users",
         share: 38,
-        summary: "Succeed on both variants but take a longer path in Variant B.",
+        summary: "Identify the target on both variants but take longer in Variant B.",
         bestVariantId: "v-a",
       },
       {
         id: "s-3",
         name: "Low-familiarity users",
         share: 28,
-        summary: "Highest abandonment on Variant B after two failed scans of the tab bar.",
+        summary: "Highest no-action on Variant B after failing to find the target on first scan.",
         bestVariantId: "v-a",
       },
     ],
   },
-  // New snapshot results
   snapshotResults: {
     predictedWinnerVariantId: "v-a",
     evidenceConfidence: "medium",
     primaryDifference:
-      "Variant A's sidebar kept the cohort report visible, lifting correct target selection by 22pp over Variant B's overflow menu.",
+      "Variant A's sidebar kept the Retention / Cohorts target visible, lifting correct target selection by 22pp over Variant B's overflow menu.",
     recommendation:
       "Re-run Variant A and B at 1,000 simulations before scheduling human validation.",
     variantMetrics: {
@@ -644,14 +642,14 @@ const navigationExperiment: Experiment = {
         name: "Experienced",
         share: 38,
         variantScores: { "v-a": 85, "v-b": 70 },
-        summary: "Succeed on both but take a longer path in Variant B.",
+        summary: "Identify the target on both but take longer in Variant B.",
       },
       {
         id: "c-3",
         name: "Low familiarity",
         share: 28,
         variantScores: { "v-a": 72, "v-b": 40 },
-        summary: "Highest abandonment on Variant B after two failed scans.",
+        summary: "Highest no-action on Variant B after failing to find the target on first scan.",
       },
     ],
     observedIssues: [
@@ -659,8 +657,9 @@ const navigationExperiment: Experiment = {
         id: "oi-1",
         variantId: "v-b",
         severity: "high",
-        title: "Overflow menu hides a high-intent report",
-        description: "Cohort report was reached on the first attempt in only 52% of sessions.",
+        title: "Overflow menu hides the target",
+        description:
+          "Retention / Cohorts was identified on the first attempt in only 52% of sessions.",
         affectedShare: 48,
       },
       {
@@ -687,7 +686,7 @@ const navigationExperiment: Experiment = {
       ],
     },
     rationale:
-      "The sidebar kept every report category visible, so simulated sessions selected the correct group on the first attempt far more often. Confidence is medium because the pilot ran at only 100 simulations.",
+      "The sidebar kept every report category visible, so the Retention / Cohorts target was identified on the first scan far more often. Confidence is medium because the pilot ran at only 100 simulations.",
   },
 };
 
@@ -699,21 +698,19 @@ const pricingExperiment: Experiment = {
   status: "complete",
   persona:
     "Team admin comparing plans for a five-person team, price sensitive and checking specific feature limits.",
-  task: "Select the plan that includes SSO for a five-seat team.",
-  successEvent: "Correct plan selected on the first commitment, with no return to the plan list.",
+  task: "Choose the plan that includes SSO for a five-person team.",
+  successEvent: "The Business plan is selected.",
   hypothesis:
-    "A guided recommender will outperform a comparison table by reducing decision complexity.",
+    "A card layout with feature highlights will make SSO discoverability clearer than a dense comparison table.",
   device: "desktop",
   pilotSize: 500,
   behaviourDiversity: "medium",
   createdAt: "2026-08-25T12:00:00Z",
   updatedAt: "2026-08-28T18:11:00Z",
-  // Legacy
   simulationSize: 500,
   stage: "pilot",
   owner: "Ines Halvorsen",
-  successCriteria:
-    "Correct plan selected on the first commitment, with no return to the plan list.",
+  successCriteria: "The Business plan is selected on the first interaction.",
   variants: [
     {
       id: "v-a",
@@ -744,7 +741,7 @@ const pricingExperiment: Experiment = {
       source: "plans-cards.png",
       screenshotUrl: "mock://plans-cards.png",
       detectedTarget: {
-        label: "Business card — Get started",
+        label: "Business — Get started",
         boundingBox: { x: 0.4, y: 0.7, width: 0.2, height: 0.06 },
         confidence: 0.83,
         status: "confirmed",
@@ -760,12 +757,11 @@ const pricingExperiment: Experiment = {
       },
     },
   ],
-  // Legacy results — note: no winner (inconclusive)
   results: {
     winnerVariantId: "v-b",
     confidence: "low",
     rationale:
-      "Both variants performed nearly identically across all metrics. The difference in correct first action (81% vs 82%) is within the expected simulation noise at this pilot scale. No clear winner can be recommended at this confidence level.",
+      "Both variants performed nearly identically. The difference in correct first action (81% vs 82%) is within expected simulation noise at this pilot scale. No clear winner can be recommended at this confidence level.",
     recommendation:
       "No clear winner. Consider refining the task or testing with a larger simulation scale before committing to either variant.",
     issues: [
@@ -773,8 +769,8 @@ const pricingExperiment: Experiment = {
         id: "i-1",
         variantId: "v-a",
         severity: "low",
-        title: "SSO feature requires scrolling in the table",
-        detail: "Some sessions needed to scroll to find the SSO row, adding a small delay.",
+        title: "SSO row requires scrolling in the table",
+        detail: "Some sessions needed to scroll to find the SSO row, delaying identification.",
       },
     ],
     segments: [
@@ -782,28 +778,26 @@ const pricingExperiment: Experiment = {
         id: "s-1",
         name: "Price sensitive",
         share: 45,
-        summary: "Compare all plans carefully before committing. Perform similarly on both.",
+        summary: "Compare all plans carefully before selecting. Perform similarly on both.",
         bestVariantId: "v-b",
       },
       {
         id: "s-2",
         name: "Feature focused",
         share: 35,
-        summary: "Scan for SSO specifically. Slightly faster on the table layout.",
+        summary: "Scan for SSO specifically. Slightly faster identification on the table layout.",
         bestVariantId: "v-a",
       },
       {
         id: "s-3",
         name: "Quick deciders",
         share: 20,
-        summary: "Commit to the first plausible plan. No meaningful difference between variants.",
+        summary: "Select the first plausible plan. No meaningful difference between variants.",
         bestVariantId: "v-b",
       },
     ],
   },
-  // New snapshot results — inconclusive, no predicted winner
   snapshotResults: {
-    predictedWinnerVariantId: undefined,
     evidenceConfidence: "inconclusive",
     primaryDifference:
       "The variants differ by only 1pp on correct first action (81% vs 82%), well within simulation noise at this scale.",
@@ -828,24 +822,24 @@ const pricingExperiment: Experiment = {
     behaviouralCohorts: [
       {
         id: "c-1",
-        name: "Price sensitive",
+        name: "Cautious",
         share: 45,
         variantScores: { "v-a": 80, "v-b": 82 },
-        summary: "Compare all plans carefully. Perform similarly on both.",
+        summary: "Compare all plans carefully before selecting. Perform similarly on both.",
       },
       {
         id: "c-2",
-        name: "Feature focused",
+        name: "Experienced",
         share: 35,
         variantScores: { "v-a": 83, "v-b": 81 },
-        summary: "Scan for SSO specifically. Slightly faster on the table layout.",
+        summary: "Scan for SSO specifically. Slightly faster identification on the table layout.",
       },
       {
         id: "c-3",
-        name: "Quick deciders",
+        name: "Hurried",
         share: 20,
         variantScores: { "v-a": 79, "v-b": 83 },
-        summary: "Commit to the first plausible plan. No meaningful difference.",
+        summary: "Select the first plausible plan. No meaningful difference.",
       },
     ],
     observedIssues: [
@@ -853,8 +847,8 @@ const pricingExperiment: Experiment = {
         id: "oi-1",
         variantId: "v-a",
         severity: "low",
-        title: "SSO feature requires scrolling in the table",
-        description: "Some sessions needed to scroll to find the SSO row, adding a small delay.",
+        title: "SSO row requires scrolling in the table",
+        description: "Some sessions needed to scroll to find the SSO row, delaying identification.",
         affectedShare: 12,
       },
     ],
@@ -880,32 +874,31 @@ const pricingExperiment: Experiment = {
 // 4. Running experiment — no results yet
 const onboardingExperiment: Experiment = {
   id: "exp-1038",
-  name: "Onboarding — guided setup vs. blank workspace",
+  name: "Onboarding first-action discoverability",
   type: "snapshot",
   status: "running",
   persona:
     "Operations lead evaluating the product during a trial, familiar with similar tools but short on time.",
-  task: "Create a first workspace and invite two teammates within the first session.",
-  successEvent: "Workspace created and at least one invite sent without leaving the flow.",
+  task: "Start creating your first workspace.",
+  successEvent: "The 'Create workspace' action is selected.",
   hypothesis:
-    "A guided wizard will reduce no-action rates compared to a blank workspace with a checklist.",
+    "A prominent call-to-action button will reduce no-action rates compared to a contextual checklist.",
   device: "desktop",
   pilotSize: 500,
   behaviourDiversity: "medium",
   createdAt: "2026-08-26T08:00:00Z",
   updatedAt: "2026-08-28T09:05:00Z",
-  // Legacy
   simulationSize: 500,
   stage: "pilot",
   owner: "Tomás Ferreira",
-  successCriteria: "Workspace created and at least one invite sent without leaving the flow.",
+  successCriteria: "The 'Create workspace' action is selected on the first interaction.",
   variants: [
     {
       id: "v-a",
       name: "Variant A",
-      description: "Guided four-step setup wizard.",
-      source: "onboarding-wizard.png",
-      screenshotUrl: "mock://onboarding-wizard.png",
+      description: "Large primary call-to-action button centred above an empty workspace preview.",
+      source: "onboarding-cta.png",
+      screenshotUrl: "mock://onboarding-cta.png",
       detectedTarget: {
         label: "Create workspace",
         boundingBox: { x: 0.35, y: 0.55, width: 0.3, height: 0.06 },
@@ -917,7 +910,7 @@ const onboardingExperiment: Experiment = {
     {
       id: "v-b",
       name: "Variant B",
-      description: "Blank workspace with a contextual checklist panel.",
+      description: "Empty workspace with a contextual checklist panel.",
       source: "onboarding-checklist.png",
       screenshotUrl: "mock://onboarding-checklist.png",
       detectedTarget: {
@@ -934,35 +927,34 @@ const onboardingExperiment: Experiment = {
 // 5. Draft experiment — no results, minimal data
 const signupDraftExperiment: Experiment = {
   id: "exp-1045",
-  name: "Signup — single form vs. progressive disclosure",
+  name: "Signup CTA discoverability",
   type: "snapshot",
   status: "draft",
   persona:
     "Prospective user arriving from a product comparison site, moderately technical and evaluating two competing tools.",
-  task: "Create an account and reach the product dashboard.",
-  successEvent: "Dashboard reached on the first attempt without abandoning the signup form.",
+  task: "Start creating an account.",
+  successEvent: "The 'Sign up' call-to-action is selected.",
   device: "mobile",
   pilotSize: 500,
   behaviourDiversity: "medium",
   createdAt: "2026-09-16T10:00:00Z",
   updatedAt: "2026-09-16T10:00:00Z",
-  // Legacy
   simulationSize: 500,
   stage: "pilot",
   owner: "Ines Halvorsen",
-  successCriteria: "Dashboard reached on the first attempt without abandoning the signup form.",
+  successCriteria: "The 'Sign up' call-to-action is selected on the first interaction.",
   variants: [
     {
       id: "v-a",
       name: "Variant A",
-      description: "Single-page signup form with all fields visible.",
-      source: "signup-single-form.png",
+      description: "Single prominent sign-up button with email and social options visible.",
+      source: "signup-prominent.png",
     },
     {
       id: "v-b",
       name: "Variant B",
-      description: "Progressive disclosure: email first, then profile, then verification.",
-      source: "signup-progressive.png",
+      description: "Email field first with sign-up action revealed after entering an address.",
+      source: "signup-email-first.png",
     },
   ],
 };
@@ -970,7 +962,7 @@ const signupDraftExperiment: Experiment = {
 const EXPERIMENTS: Experiment[] = [
   pricingExperiment,
   onboardingExperiment,
-  checkoutExperiment,
+  deliveryExperiment,
   navigationExperiment,
   signupDraftExperiment,
 ];

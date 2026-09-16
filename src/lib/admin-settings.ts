@@ -7,11 +7,15 @@
  *
  * No secrets are stored. The AI settings only track whether an API key
  * has been configured (apiKeyConfigured: boolean), never the key itself.
+ *
+ * SSR safety: the initial render (server and client) always uses
+ * DEFAULT_SETTINGS. Persisted settings are loaded in a useEffect after
+ * mount so the first client render matches server-rendered HTML.
  */
 
 import { useEffect, useState, useCallback } from "react";
 
-import type { AdminSettings } from "./types";
+import type { AdminSettings, AdminSettingsPatch } from "./types";
 
 // ─── Defaults ─────────────────────────────────────────────────────
 
@@ -204,15 +208,33 @@ function mergeDefaults(partial: Partial<AdminSettings>): AdminSettings {
   };
 }
 
+function applyPatch(current: AdminSettings, patch: AdminSettingsPatch): AdminSettings {
+  return {
+    ...current,
+    general: patch.general ? { ...current.general, ...patch.general } : current.general,
+    ai: patch.ai ? { ...current.ai, ...patch.ai } : current.ai,
+    simulation: patch.simulation
+      ? { ...current.simulation, ...patch.simulation }
+      : current.simulation,
+    population: patch.population
+      ? { ...current.population, ...patch.population }
+      : current.population,
+    evaluation: patch.evaluation
+      ? { ...current.evaluation, ...patch.evaluation }
+      : current.evaluation,
+    features: patch.features ? { ...current.features, ...patch.features } : current.features,
+  };
+}
+
 // ─── Service API ──────────────────────────────────────────────────
 
 export function getSettings(): AdminSettings {
   return loadFromStorage();
 }
 
-export function updateSettings(patch: Partial<AdminSettings>): AdminSettings {
+export function updateSettings(patch: AdminSettingsPatch): AdminSettings {
   const current = loadFromStorage();
-  const merged = mergeDefaults({ ...current, ...patch });
+  const merged = applyPatch(current, patch);
   const next: AdminSettings = {
     ...merged,
     configVersion: current.configVersion + 1,
@@ -222,23 +244,35 @@ export function updateSettings(patch: Partial<AdminSettings>): AdminSettings {
   return next;
 }
 
+/**
+ * Reset to defaults but treat it as a configuration update so
+ * configVersion never moves backwards.
+ */
 export function resetSettings(): AdminSettings {
-  if (typeof window !== "undefined") {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
-  }
-  return DEFAULT_SETTINGS;
+  const current = loadFromStorage();
+  const next: AdminSettings = {
+    ...DEFAULT_SETTINGS,
+    configVersion: current.configVersion + 1,
+    lastUpdated: new Date().toISOString(),
+  };
+  saveToStorage(next);
+  return next;
 }
 
 // ─── React hook for components ────────────────────────────────────
+//
+// SSR-safe: initial state is always DEFAULT_SETTINGS on both server and
+// client. Persisted settings are loaded in a useEffect after mount.
 
 export function useAdminSettings() {
-  const [settings, setSettings] = useState<AdminSettings>(() => getSettings());
+  const [settings, setSettings] = useState<AdminSettings>(() => DEFAULT_SETTINGS);
 
-  const update = useCallback((patch: Partial<AdminSettings>) => {
+  // Hydrate from localStorage after mount (client only)
+  useEffect(() => {
+    setSettings(loadFromStorage());
+  }, []);
+
+  const update = useCallback((patch: AdminSettingsPatch) => {
     setSettings(updateSettings(patch));
   }, []);
 
@@ -247,15 +281,14 @@ export function useAdminSettings() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const handler = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) {
         setSettings(loadFromStorage());
       }
     };
-    if (typeof window !== "undefined") {
-      window.addEventListener("storage", handler);
-      return () => window.removeEventListener("storage", handler);
-    }
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
   }, []);
 
   return { settings, update, reset };
