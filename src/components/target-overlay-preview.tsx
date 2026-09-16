@@ -12,8 +12,10 @@ export interface TargetOverlayPreviewProps {
   adjustMode: boolean;
   /** Live bounding box during drawing — controlled by parent */
   onBoxChange: (box: BoundingBox) => void;
-  /** Called when drawing completes (pointer up) */
+  /** Called when a valid drawing completes (pointer up) */
   onDrawEnd: () => void;
+  /** Called when an invalid (too small) drawing completes */
+  onDrawCancel: () => void;
   alt: string;
 }
 
@@ -23,6 +25,7 @@ export function TargetOverlayPreview({
   adjustMode,
   onBoxChange,
   onDrawEnd,
+  onDrawCancel,
   alt,
 }: TargetOverlayPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +82,7 @@ export function TargetOverlayPreview({
       onDrawEnd();
     } else {
       setDrawBox(null);
+      onDrawCancel();
     }
   }
 
@@ -105,12 +109,8 @@ export function TargetOverlayPreview({
       {/* Target overlay rectangle */}
       <div
         className={cn(
-          "pointer-events-none absolute border-2",
-          adjustMode
-            ? "border-primary bg-primary/15"
-            : displayBox === boundingBox && boundingBox === drawBox
-              ? "border-primary bg-primary/15"
-              : "border-primary bg-primary/10",
+          "pointer-events-none absolute border-2 border-primary",
+          adjustMode ? "bg-primary/15" : "bg-primary/10",
         )}
         style={{
           left: `${displayBox.x * 100}%`,
