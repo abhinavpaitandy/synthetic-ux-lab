@@ -1,0 +1,17 @@
+{
+  "name": "Synthetic UX Lab",
+  "install": "npm ci",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "npm run dev",
+      "description": "TanStack Start dev server (Vite + SSR)"
+    }
+  ],
+  "ports": [
+    {
+      "name": "web",
+      "port": 8080
+    }
+  ]
+}
