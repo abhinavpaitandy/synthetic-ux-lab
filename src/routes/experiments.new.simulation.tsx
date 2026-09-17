@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Loader2, Play } from "lucide-react";
 
 import { PageBody, PageHeader } from "@/components/app-shell";
@@ -29,9 +29,9 @@ export const Route = createFileRoute("/experiments/new/simulation")({
 });
 
 const PILOT_OPTIONS: { value: PilotSize; label: string; description: string }[] = [
-  { value: 100, label: "100", description: "Quick directional signal" },
-  { value: 500, label: "500", description: "Balanced pilot for most tests" },
-  { value: 1000, label: "1,000", description: "Higher confidence, slower" },
+  { value: 100, label: "100", description: "Quick directional check" },
+  { value: 500, label: "500", description: "Recommended for most pre-tests" },
+  { value: 1000, label: "1,000", description: "Broader synthetic coverage" },
 ];
 
 const DIVERSITY_OPTIONS: {
@@ -39,15 +39,45 @@ const DIVERSITY_OPTIONS: {
   label: string;
   description: string;
 }[] = [
-  { value: "low", label: "Low", description: "Narrow, goal-driven agents" },
-  { value: "medium", label: "Medium", description: "Mixed interaction styles" },
-  { value: "high", label: "High", description: "Wide behavioural spread" },
+  { value: "low", label: "Low", description: "Variation stays close to the primary persona." },
+  {
+    value: "medium",
+    label: "Medium",
+    description: "Moderate behavioural variation around the primary persona.",
+  },
+  {
+    value: "high",
+    label: "High",
+    description: "Broader variation while remaining compatible with the persona.",
+  },
 ];
+
+const COHORT_PREVIEW: Record<BehaviourDiversity, string[]> = {
+  low: ["Cautious", "Experienced", "Hurried"],
+  medium: ["Hurried", "Cautious", "Experienced", "Low familiarity", "Exploratory"],
+  high: ["Hurried", "Cautious", "Experienced", "Low familiarity", "Low attention", "Exploratory"],
+};
+
+const RUN_PHASES = [
+  "Preparing synthetic population…",
+  "Simulating first-action decisions…",
+  "Aggregating results…",
+];
+
+const PHASE_DURATION = 280;
 
 function SimulationSetupPage() {
   const navigate = useNavigate();
   const { draft, setPilotSize, setBehaviourDiversity } = useDraft();
   const [isRunning, setIsRunning] = useState(false);
+  const [runPhase, setRunPhase] = useState(0);
+  const phaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (phaseTimer.current) clearTimeout(phaseTimer.current);
+    };
+  }, []);
 
   const variants = draft.variants;
 
@@ -62,12 +92,31 @@ function SimulationSetupPage() {
   const missingTargets = !hasTargets || !allReviewed;
   const incomplete = !hasCoreData || !hasMinVariants || missingScreenshots || missingTargets;
 
+  const totalObservations = draft.pilotSize * variants.length;
+  const pilotLabel = draft.pilotSize.toLocaleString();
+  const diversityLabel =
+    draft.behaviourDiversity.charAt(0).toUpperCase() + draft.behaviourDiversity.slice(1);
+
   function handleRun() {
     setIsRunning(true);
-    setTimeout(() => {
-      setIsRunning(false);
-      navigate({ to: "/experiments/$experimentId", params: { experimentId: "exp-001" } });
-    }, 400);
+    setRunPhase(0);
+
+    RUN_PHASES.forEach((_, i) => {
+      phaseTimer.current = setTimeout(
+        () => {
+          if (i < RUN_PHASES.length - 1) {
+            setRunPhase(i + 1);
+          } else {
+            setIsRunning(false);
+            // Prototype only:
+            // Results v2 will replace this fixed mock experiment with
+            // results generated from the current experiment draft.
+            navigate({ to: "/experiments/$experimentId", params: { experimentId: "exp-1042" } });
+          }
+        },
+        (i + 1) * PHASE_DURATION,
+      );
+    });
   }
 
   // ─── Missing data guards ──────────────────────────────────────
@@ -197,6 +246,10 @@ function SimulationSetupPage() {
                   />
                 ))}
               </RadioGroup>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Synthetic session count reflects simulated behavioural exploration. It is not
+                equivalent to a human research sample size.
+              </p>
             </div>
 
             {/* Behaviour diversity */}
@@ -222,6 +275,33 @@ function SimulationSetupPage() {
               </RadioGroup>
             </div>
 
+            {/* Synthetic population preview */}
+            <div className="rounded-lg border border-border bg-card p-5 shadow-card">
+              <h2 className="text-sm font-semibold text-foreground">Synthetic population</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                The pilot will vary behavioural traits around your primary persona.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {COHORT_PREVIEW[draft.behaviourDiversity].map((cohort) => (
+                  <Pill key={cohort} tone="neutral">
+                    {cohort}
+                  </Pill>
+                ))}
+              </div>
+            </div>
+
+            {/* Simulation estimate */}
+            <div className="rounded-lg border border-border bg-surface px-5 py-4">
+              <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-3">
+                <SummaryRow label="Pilot" value={`${pilotLabel} synthetic sessions per variant`} />
+                <SummaryRow label="Variants" value={String(variants.length)} />
+                <SummaryRow
+                  label="Total simulated observations"
+                  value={totalObservations.toLocaleString()}
+                />
+              </dl>
+            </div>
+
             {/* Actions */}
             <div className="flex items-center justify-end gap-3">
               <Button variant="outline" asChild>
@@ -234,12 +314,12 @@ function SimulationSetupPage() {
                 {isRunning ? (
                   <>
                     <Loader2 className="size-4 animate-spin" />
-                    Running…
+                    <span aria-live="polite">{RUN_PHASES[runPhase]}</span>
                   </>
                 ) : (
                   <>
                     <Play className="size-4" />
-                    Run Simulation
+                    Run {pilotLabel} Simulations
                   </>
                 )}
               </Button>
@@ -253,14 +333,9 @@ function SimulationSetupPage() {
               <dl className="mt-4 space-y-3 text-sm">
                 <AsideRow label="Experiment" value={draft.name} />
                 <AsideRow label="Variants" value={String(variants.length)} />
-                <AsideRow label="Pilot size" value={draft.pilotSize.toLocaleString()} />
-                <AsideRow
-                  label="Diversity"
-                  value={
-                    draft.behaviourDiversity.charAt(0).toUpperCase() +
-                    draft.behaviourDiversity.slice(1)
-                  }
-                />
+                <AsideRow label="Pilot" value={`${pilotLabel} / variant`} />
+                <AsideRow label="Diversity" value={diversityLabel} />
+                <AsideRow label="Total observations" value={totalObservations.toLocaleString()} />
                 <AsideRow label="Next" value="View results" />
               </dl>
             </div>
