@@ -204,18 +204,55 @@ function buildCohorts(
   });
 }
 
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
 function buildClickPoints(
   variantIds: string[],
-  targets: { x: number; y: number }[],
+  targets: { x: number; y: number; width: number; height: number }[],
 ): Record<string, ClickPoint[]> {
   const points: Record<string, ClickPoint[]> = {};
   variantIds.forEach((vid, i) => {
-    const t = targets[i] ?? { x: 0.5, y: 0.5 };
-    const correct1: ClickPoint = { x: t.x, y: t.y, correct: true, cohortId: "pc-1" };
-    const correct2: ClickPoint = { x: t.x + 0.02, y: t.y - 0.01, correct: true, cohortId: "pc-2" };
-    const correct3: ClickPoint = { x: t.x - 0.01, y: t.y + 0.01, correct: true, cohortId: "pc-3" };
-    const wrong: ClickPoint = { x: 0.15, y: 0.25, correct: false, cohortId: "pc-4" };
-    points[vid] = [correct1, correct2, correct3, wrong];
+    const t = targets[i] ?? { x: 0.5, y: 0.5, width: 0.12, height: 0.06 };
+    const cx = t.x;
+    const cy = t.y;
+    const halfW = t.width / 2;
+    const halfH = t.height / 2;
+
+    const correct: ClickPoint[] = [
+      {
+        x: clamp01(cx - halfW * 0.4),
+        y: clamp01(cy - halfH * 0.3),
+        correct: true,
+        cohortId: "pc-1",
+      },
+      {
+        x: clamp01(cx + halfW * 0.3),
+        y: clamp01(cy - halfH * 0.2),
+        correct: true,
+        cohortId: "pc-2",
+      },
+      {
+        x: clamp01(cx - halfW * 0.2),
+        y: clamp01(cy + halfH * 0.4),
+        correct: true,
+        cohortId: "pc-3",
+      },
+      {
+        x: clamp01(cx + halfW * 0.45),
+        y: clamp01(cy + halfH * 0.1),
+        correct: true,
+        cohortId: "pc-1",
+      },
+    ];
+
+    const incorrect: ClickPoint[] = [
+      { x: clamp01(0.12), y: clamp01(0.22), correct: false, cohortId: "pc-4" },
+      { x: clamp01(0.85), y: clamp01(0.18), correct: false, cohortId: "pc-5" },
+    ];
+
+    points[vid] = [...correct, ...incorrect];
   });
   return points;
 }
@@ -262,7 +299,9 @@ export function buildPrototypeSnapshotExperiment(draft: ExperimentDraft): Experi
 
   const targets = draft.variants.map((v) => {
     const bb = v.detectedTarget?.boundingBox;
-    return bb ? { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 } : { x: 0.5, y: 0.5 };
+    return bb
+      ? { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2, width: bb.width, height: bb.height }
+      : { x: 0.5, y: 0.5, width: 0.12, height: 0.06 };
   });
 
   const cohorts = buildCohorts(draft.behaviourDiversity, variantIds);
