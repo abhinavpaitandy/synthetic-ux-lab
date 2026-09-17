@@ -7,6 +7,7 @@ import {
   Target,
   MousePointerClick,
   PlusCircle,
+  Info,
 } from "lucide-react";
 import {
   Bar,
@@ -37,11 +38,7 @@ import {
   isPrototypeDraftReady,
   toCleanSnapshotExperiment,
 } from "@/lib/snapshot-results";
-import {
-  SNAPSHOT_METRIC_DEFS,
-  type Experiment,
-  type SnapshotExperimentResults,
-} from "@/lib/types";
+import { SNAPSHOT_METRIC_DEFS, type Experiment, type SnapshotExperimentResults } from "@/lib/types";
 import { useDraft } from "@/lib/draft-store";
 import { cn } from "@/lib/utils";
 
@@ -191,23 +188,9 @@ function PendingState({ experiment }: { experiment: Experiment }) {
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
           {running
-            ? `Running ${experiment.pilotSize.toLocaleString()} synthetic sessions across ${experiment.variants.length} variants. Results appear here when the pilot completes.`
-            : "Finish the setup and run a pilot to generate comparative results for this experiment."
+            ? `Running ${experiment.pilotSize.toLocaleString()} synthetic sessions per variant. Results will appear when the pilot completes.`
+            : "Finish the setup and run a pilot to generate comparative results for this experiment."}
         </p>
-        <div className="mx-auto mt-6 max-w-sm space-y-2">
-          {experiment.variants.map((v, i) => (
-            <div
-              key={v.id}
-              className="h-2 overflow-hidden rounded-full bg-muted"
-              aria-hidden="true"
-            >
-              <div
-                className={cn("h-full rounded-full bg-primary/70", running && "animate-pulse")}
-                style={{ width: running ? `${72 - i * 18}%` : "0%" }}
-              />
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );
@@ -217,8 +200,7 @@ function PendingState({ experiment }: { experiment: Experiment }) {
 
 function ContextCard({ experiment }: { experiment: Experiment }) {
   const diversityLabel =
-    experiment.behaviourDiversity.charAt(0).toUpperCase() +
-    experiment.behaviourDiversity.slice(1);
+    experiment.behaviourDiversity.charAt(0).toUpperCase() + experiment.behaviourDiversity.slice(1);
 
   const fields = [
     { label: "Persona", value: experiment.persona },
@@ -358,11 +340,14 @@ function SnapshotResults({
                   <TableCell className="pl-5">
                     <div className="font-medium text-foreground">{m.label}</div>
                     <div className="text-xs text-muted-foreground">{m.help}</div>
-                    {m.role === "informational" ? (
-                      <Pill tone="neutral" className="mt-1">
-                        Informational
-                      </Pill>
-                    ) : null}
+                    <div className="mt-1 flex items-center gap-2">
+                      {m.role === "informational" ? (
+                        <Pill tone="neutral">Informational</Pill>
+                      ) : null}
+                      {m.lowerIsBetter ? (
+                        <span className="text-[11px] text-muted-foreground">Lower is better</span>
+                      ) : null}
+                    </div>
                   </TableCell>
                   {variants.map((v) => {
                     const value = results.variantMetrics[v.id]?.[m.key];
@@ -386,6 +371,15 @@ function SnapshotResults({
             })}
           </TableBody>
         </Table>
+        <div className="border-t border-border px-5 py-3">
+          <div className="flex items-start gap-2">
+            <Info className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Agent certainty reflects simulated agent confidence in its selected action. It is not
+              experiment evidence.
+            </p>
+          </div>
+        </div>
       </section>
 
       {/* Chart */}
@@ -441,9 +435,7 @@ function SnapshotResults({
         <section className="rounded-lg border border-border bg-card p-6 shadow-card">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">
-              Why this variant performed better
-            </h2>
+            <h2 className="text-sm font-semibold text-foreground">Why this result</h2>
           </div>
           {results.primaryDifference ? (
             <p className="mt-3 text-sm leading-relaxed text-foreground/85">
@@ -530,7 +522,7 @@ function SnapshotResults({
                 ) : null}
                 {bestVariant ? (
                   <div className="mt-3">
-                    <Pill tone="accent">Prefers {bestVariant.name}</Pill>
+                    <Pill tone="accent">Strongest variant: {bestVariant.name}</Pill>
                   </div>
                 ) : null}
               </div>
@@ -547,8 +539,26 @@ function SnapshotResults({
             <h2 className="text-sm font-semibold text-foreground">Simulated click distribution</h2>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Synthetic first-click locations overlaid on each variant screenshot.
+            Representative synthetic first-click sample.
           </p>
+          {/* Legend */}
+          <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="size-2.5 rounded-full bg-success" aria-hidden="true" />
+              Correct first action
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span
+                className="size-2.5 rounded-full border-2 border-destructive bg-transparent"
+                aria-hidden="true"
+              />
+              Other first action
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-4 border-2 border-primary/70" aria-hidden="true" />
+              Expected target
+            </span>
+          </div>
           <div className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {variants.map((variant) => {
               const points = results.clickPoints[variant.id] ?? [];
@@ -583,8 +593,9 @@ function SnapshotResults({
           {results.recommendation}
         </p>
         <p className="mt-2 max-w-3xl text-xs leading-relaxed text-accent-foreground/80">
-          Synthetic pre-testing narrows the field. Confirm the outcome with real participants before
-          shipping — simulated sessions are not a replacement for usability research.
+          Synthetic simulations are a pre-testing signal used to prioritise what should be validated
+          with real users. They are not a substitute for usability research or production
+          experimentation.
         </p>
       </section>
     </div>
@@ -592,6 +603,10 @@ function SnapshotResults({
 }
 
 // ─── Click map preview ───────────────────────────────────────────
+
+function isMockScreenshot(url: string): boolean {
+  return url.startsWith("mock://");
+}
 
 function ClickMapPreview({
   screenshotUrl,
@@ -610,14 +625,23 @@ function ClickMapPreview({
     );
   }
 
+  const isMock = isMockScreenshot(screenshotUrl);
+
   return (
-    <div className="relative aspect-[3/4] overflow-hidden rounded-md border border-border bg-surface">
-      <img
-        src={screenshotUrl}
-        alt="Variant screenshot"
-        className="absolute inset-0 size-full object-cover"
-        draggable={false}
-      />
+    <div className="relative overflow-hidden rounded-md border border-border bg-surface">
+      {isMock ? (
+        <div className="flex aspect-[3/4] flex-col items-center justify-center gap-2 bg-muted/30">
+          <Camera className="size-6 text-muted-foreground/50" aria-hidden="true" />
+          <span className="text-xs text-muted-foreground">Screenshot unavailable in demo data</span>
+        </div>
+      ) : (
+        <img
+          src={screenshotUrl}
+          alt="Variant screenshot"
+          className="block max-h-[400px] w-full object-contain"
+          draggable={false}
+        />
+      )}
       {/* Target bounding box */}
       {target ? (
         <div
@@ -630,13 +654,15 @@ function ClickMapPreview({
           }}
         />
       ) : null}
-      {/* Click points */}
+      {/* Click points — correct = solid dot, incorrect = outlined ring */}
       {points.map((pt, i) => (
         <div
           key={i}
           className={cn(
-            "pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-white/50",
-            pt.correct ? "bg-success" : "bg-destructive",
+            "pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full",
+            pt.correct
+              ? "size-2 bg-success ring-1 ring-white/50"
+              : "size-2.5 border-2 border-destructive bg-transparent",
           )}
           style={{ left: `${pt.x * 100}%`, top: `${pt.y * 100}%` }}
         />
