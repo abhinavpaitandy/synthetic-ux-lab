@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Sparkles, TriangleAlert } from "lucide-react";
+import { ArrowLeft, Sparkles, TriangleAlert, Target, MousePointerClick } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -13,7 +13,7 @@ import {
 
 import { AppShell, PageBody, PageHeader } from "@/components/app-shell";
 import { ExperimentStepper } from "@/components/experiment-stepper";
-import { ConfidenceBadge, Pill, StageBadge, StatusBadge } from "@/components/status-badge";
+import { EvidenceBadge, Pill, StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -23,23 +23,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatDate, getExperiment } from "@/lib/mock-data";
 import {
-  METRIC_DEFS,
-  formatCount,
-  formatDate,
-  getExperiment,
+  buildPrototypeSnapshotExperiment,
+  toCleanSnapshotExperiment,
+} from "@/lib/snapshot-results";
+import {
+  SNAPSHOT_METRIC_DEFS,
   type Experiment,
-  type VariantMetrics,
-} from "@/lib/mock-data";
+  type SnapshotExperimentResults,
+  type SnapshotVariantMetrics,
+} from "@/lib/types";
+import { useDraft } from "@/lib/draft-store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/experiments/$experimentId")({
-  loader: ({ params }) => ({ experiment: getExperiment(params.experimentId) ?? null }),
-  head: ({ loaderData }) => {
-    const name = loaderData?.experiment?.name ?? "Experiment";
-    const title = `${name} — Synthetic UX Lab`;
+  head: ({ params }) => {
+    const isPrototype = params.experimentId === "prototype-current";
+    const title = isPrototype
+      ? "Prototype result — Synthetic UX Lab"
+      : "Experiment — Synthetic UX Lab";
     const description =
-      "Synthetic simulation results comparing interface variants on task success, efficiency and abandonment.";
+      "Snapshot results comparing interface variants on first-action discoverability and target selection.";
     return {
       meta: [
         { title },
@@ -47,8 +52,7 @@ export const Route = createFileRoute("/experiments/$experimentId")({
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:type", content: "article" },
-        { name: "twitter:card", content: "summary_large_image" },
-        ...(loaderData?.experiment ? [] : [{ name: "robots", content: "noindex" }]),
+        ...(isPrototype ? [{ name: "robots", content: "noindex" }] : []),
       ],
     };
   },
@@ -56,7 +60,20 @@ export const Route = createFileRoute("/experiments/$experimentId")({
 });
 
 function ResultsPage() {
-  const { experiment } = Route.useLoaderData();
+  const { experimentId } = Route.useParams();
+  const isPrototype = experimentId === "prototype-current";
+  const draftCtx = useDraft();
+
+  let experiment: Experiment | null = null;
+
+  if (isPrototype) {
+    experiment = buildPrototypeSnapshotExperiment(draftCtx.draft);
+  } else {
+    const mock = getExperiment(experimentId);
+    if (mock) {
+      experiment = toCleanSnapshotExperiment(mock);
+    }
+  }
 
   if (!experiment) {
     return (
@@ -74,16 +91,20 @@ function ResultsPage() {
     );
   }
 
+  const isComplete = experiment.status === "complete" && experiment.results;
+  const eyebrow = isPrototype
+    ? "Prototype result"
+    : `${experiment.id} · updated ${formatDate(experiment.updatedAt)}`;
+
   return (
     <AppShell>
       <PageHeader
-        eyebrow={`${experiment.id} · ${experiment.owner} · updated ${formatDate(experiment.updatedAt)}`}
+        eyebrow={eyebrow}
         title={experiment.name}
         description={experiment.task}
         actions={
           <>
             <StatusBadge status={experiment.status} />
-            <StageBadge stage={experiment.stage} />
             <Button variant="outline" asChild>
               <Link to="/">
                 <ArrowLeft className="size-4" />
@@ -95,13 +116,9 @@ function ResultsPage() {
       />
 
       <PageBody>
-        <ExperimentStepper
-          currentStep={5}
-          experimentId={experiment.id}
-          className="mb-6"
-        />
-        {experiment.results ? (
-          <Results experiment={experiment} />
+        <ExperimentStepper currentStep={5} experimentId={experiment.id} className="mb-6" />
+        {isComplete ? (
+          <SnapshotResults experiment={experiment} results={experiment.results!} />
         ) : (
           <PendingState experiment={experiment} />
         )}
@@ -109,6 +126,8 @@ function ResultsPage() {
     </AppShell>
   );
 }
+
+// ─── Pending state ───────────────────────────────────────────────
 
 function PendingState({ experiment }: { experiment: Experiment }) {
   const running = experiment.status === "running";
@@ -121,7 +140,7 @@ function PendingState({ experiment }: { experiment: Experiment }) {
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
           {running
-            ? `Running ${formatCount(experiment.simulationSize)} synthetic sessions across ${experiment.variants.length} variants. Results appear here when the pilot completes.`
+            ? `Running ${experiment.pilotSize.toLocaleString()} synthetic sessions across ${experiment.variants.length} variants. Results appear here when the pilot completes.`
             : "Finish the setup and run a pilot to generate comparative results for this experiment."}
         </p>
         <div className="mx-auto mt-6 max-w-sm space-y-2">
@@ -143,13 +162,15 @@ function PendingState({ experiment }: { experiment: Experiment }) {
   );
 }
 
+// ─── Context card ────────────────────────────────────────────────
+
 function ContextCard({ experiment }: { experiment: Experiment }) {
   return (
     <section className="grid gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-3">
       {[
         { label: "Primary persona", value: experiment.persona },
         { label: "User task", value: experiment.task },
-        { label: "Success criteria", value: experiment.successCriteria },
+        { label: "Success event", value: experiment.successEvent },
       ].map((f) => (
         <div key={f.label} className="bg-card px-5 py-4">
           <div className="label-caps">{f.label}</div>
@@ -160,15 +181,25 @@ function ContextCard({ experiment }: { experiment: Experiment }) {
   );
 }
 
-function Results({ experiment }: { experiment: Experiment }) {
-  const results = experiment.results!;
-  const winner = experiment.variants.find((v) => v.id === results.winnerVariantId)!;
-  const variants = experiment.variants.filter((v) => v.metrics);
+// ─── Snapshot results ────────────────────────────────────────────
 
-  const chartData = METRIC_DEFS.map((m) => {
+function SnapshotResults({
+  experiment,
+  results,
+}: {
+  experiment: Experiment;
+  results: SnapshotExperimentResults;
+}) {
+  const winnerId = results.predictedWinnerVariantId;
+  const winner = experiment.variants.find((v) => v.id === winnerId);
+  const variants = experiment.variants;
+  const totalObservations = experiment.pilotSize * variants.length;
+
+  const chartData = SNAPSHOT_METRIC_DEFS.map((m) => {
     const row: Record<string, string | number> = { metric: m.label };
     variants.forEach((v) => {
-      row[v.name] = v.metrics![m.key];
+      const metrics = results.variantMetrics[v.id];
+      if (metrics) row[v.name] = metrics[m.key];
     });
     return row;
   });
@@ -181,42 +212,50 @@ function Results({ experiment }: { experiment: Experiment }) {
       <section className="grid gap-px overflow-hidden rounded-lg border border-border bg-border lg:grid-cols-4">
         <div className="bg-accent px-5 py-5">
           <div className="label-caps text-accent-foreground/70">Predicted winner</div>
-          <div className="mt-1.5 text-2xl font-semibold text-accent-foreground">{winner.name}</div>
-          <p className="mt-1 text-xs text-accent-foreground/80">{winner.description}</p>
+          {winner ? (
+            <>
+              <div className="mt-1.5 text-2xl font-semibold text-accent-foreground">
+                {winner.name}
+              </div>
+              {winner.description ? (
+                <p className="mt-1 text-xs text-accent-foreground/80">{winner.description}</p>
+              ) : null}
+            </>
+          ) : (
+            <div className="mt-1.5 text-lg font-semibold text-accent-foreground">
+              No clear winner
+            </div>
+          )}
         </div>
         <div className="bg-card px-5 py-5">
-          <div className="label-caps">Confidence</div>
+          <div className="label-caps">Evidence confidence</div>
           <div className="mt-2">
-            <ConfidenceBadge confidence={results.confidence} />
+            <EvidenceBadge confidence={results.evidenceConfidence} />
           </div>
         </div>
         <div className="bg-card px-5 py-5">
-          <div className="label-caps">Total synthetic simulations</div>
+          <div className="label-caps">Total simulated observations</div>
           <div className="tabular mt-1.5 text-2xl font-semibold text-foreground">
-            {formatCount(experiment.simulationSize)}
+            {totalObservations.toLocaleString()}
           </div>
         </div>
         <div className="bg-card px-5 py-5">
-          <div className="label-caps">Run stage</div>
-          <div className="mt-2">
-            <StageBadge stage={experiment.stage} />
+          <div className="label-caps">Pilot size</div>
+          <div className="tabular mt-1.5 text-2xl font-semibold text-foreground">
+            {experiment.pilotSize.toLocaleString()}
           </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {experiment.stage === "pilot"
-              ? "Directional signal — validate with humans."
-              : "Large-population run."}
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">per variant</p>
         </div>
       </section>
 
       <ContextCard experiment={experiment} />
 
-      {/* Metric comparison */}
+      {/* Metric comparison table */}
       <section className="overflow-hidden rounded-lg border border-border bg-card shadow-card">
         <div className="border-b border-border px-5 py-4">
           <h2 className="text-sm font-semibold text-foreground">Variant comparison</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Aggregated across {formatCount(experiment.simulationSize)} synthetic sessions.
+            Aggregated across {totalObservations.toLocaleString()} simulated observations.
           </p>
         </div>
         <Table>
@@ -226,7 +265,7 @@ function Results({ experiment }: { experiment: Experiment }) {
               {variants.map((v) => (
                 <TableHead key={v.id} className="text-right">
                   {v.name}
-                  {v.id === winner.id ? (
+                  {v.id === winnerId ? (
                     <span className="ml-1.5 text-primary" title="Predicted winner">
                       ★
                     </span>
@@ -236,17 +275,25 @@ function Results({ experiment }: { experiment: Experiment }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {METRIC_DEFS.map((m) => {
-              const values = variants.map((v) => v.metrics![m.key]);
+            {SNAPSHOT_METRIC_DEFS.map((m) => {
+              const values = variants
+                .map((v) => results.variantMetrics[v.id]?.[m.key])
+                .filter((v): v is number => typeof v === "number");
               const best = m.lowerIsBetter ? Math.min(...values) : Math.max(...values);
               return (
                 <TableRow key={m.key}>
                   <TableCell className="pl-5">
                     <div className="font-medium text-foreground">{m.label}</div>
                     <div className="text-xs text-muted-foreground">{m.help}</div>
+                    {m.role === "informational" ? (
+                      <Pill tone="neutral" className="mt-1">
+                        Informational
+                      </Pill>
+                    ) : null}
                   </TableCell>
                   {variants.map((v) => {
-                    const value = v.metrics![m.key];
+                    const value = results.variantMetrics[v.id]?.[m.key];
+                    if (typeof value !== "number") return <TableCell key={v.id} />;
                     return (
                       <TableCell key={v.id} className="tabular text-right">
                         <span
@@ -255,7 +302,7 @@ function Results({ experiment }: { experiment: Experiment }) {
                             value === best ? "font-semibold text-foreground" : "text-foreground/70",
                           )}
                         >
-                          {value.toFixed(1)}
+                          {value}
                           <span className="ml-0.5 text-xs text-muted-foreground">{m.unit}</span>
                         </span>
                       </TableCell>
@@ -272,7 +319,7 @@ function Results({ experiment }: { experiment: Experiment }) {
       <section className="rounded-lg border border-border bg-card p-5 shadow-card">
         <h2 className="text-sm font-semibold text-foreground">Comparison chart</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Backtracking and abandonment are inverse metrics — lower is better.
+          Confusion rate and no-action rate are inverse metrics — lower is better.
         </p>
         <div className="mt-5 h-80 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -280,11 +327,11 @@ function Results({ experiment }: { experiment: Experiment }) {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
               <XAxis
                 dataKey="metric"
-                tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+                tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
                 tickLine={false}
                 axisLine={{ stroke: "var(--color-border)" }}
                 interval={0}
-                height={48}
+                height={56}
               />
               <YAxis
                 tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
@@ -316,14 +363,23 @@ function Results({ experiment }: { experiment: Experiment }) {
         </div>
       </section>
 
-      {/* Explanation + issues */}
+      {/* Rationale + observed issues */}
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-lg border border-border bg-card p-6 shadow-card">
           <div className="flex items-center gap-2">
             <Sparkles className="size-4 text-primary" />
-            <h2 className="text-sm font-semibold text-foreground">Why this variant performed better</h2>
+            <h2 className="text-sm font-semibold text-foreground">
+              Why this variant performed better
+            </h2>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-foreground/85">{results.rationale}</p>
+          {results.primaryDifference ? (
+            <p className="mt-3 text-sm leading-relaxed text-foreground/85">
+              {results.primaryDifference}
+            </p>
+          ) : null}
+          {results.rationale ? (
+            <p className="mt-3 text-sm leading-relaxed text-foreground/85">{results.rationale}</p>
+          ) : null}
           <p className="mt-4 text-[11px] text-muted-foreground">
             Generated summary based on simulated behaviour. Treat as a hypothesis to test with real
             users.
@@ -333,10 +389,10 @@ function Results({ experiment }: { experiment: Experiment }) {
         <section className="rounded-lg border border-border bg-card p-6 shadow-card">
           <div className="flex items-center gap-2">
             <TriangleAlert className="size-4 text-warning" />
-            <h2 className="text-sm font-semibold text-foreground">Observed usability issues</h2>
+            <h2 className="text-sm font-semibold text-foreground">Observed issues</h2>
           </div>
           <ul className="mt-4 space-y-3">
-            {results.issues.map((issue) => {
+            {results.observedIssues.map((issue) => {
               const variantName =
                 experiment.variants.find((v) => v.id === issue.variantId)?.name ?? "—";
               return (
@@ -347,17 +403,22 @@ function Results({ experiment }: { experiment: Experiment }) {
                         issue.severity === "high"
                           ? "warning"
                           : issue.severity === "medium"
-                            ? "neutral"
+                            ? "info"
                             : "neutral"
                       }
                     >
                       {issue.severity}
                     </Pill>
                     <span className="text-xs text-muted-foreground">{variantName}</span>
+                    {typeof issue.affectedShare === "number" ? (
+                      <span className="text-xs text-muted-foreground">
+                        · {issue.affectedShare}% affected
+                      </span>
+                    ) : null}
                   </div>
                   <div className="mt-1.5 text-sm font-medium text-foreground">{issue.title}</div>
                   <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
-                    {issue.detail}
+                    {issue.description}
                   </p>
                 </li>
               );
@@ -366,28 +427,37 @@ function Results({ experiment }: { experiment: Experiment }) {
         </section>
       </div>
 
-      {/* Segments */}
+      {/* Behavioural cohorts */}
       <section className="rounded-lg border border-border bg-card p-6 shadow-card">
-        <h2 className="text-sm font-semibold text-foreground">Behavioural segments</h2>
+        <h2 className="text-sm font-semibold text-foreground">Behavioural cohorts</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Synthetic population split by simulated behaviour profile.
+          Synthetic population varied around the primary persona.
         </p>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {results.segments.map((seg) => {
-            const best = experiment.variants.find((v) => v.id === seg.bestVariantId);
+          {results.behaviouralCohorts.map((cohort) => {
+            const scores = variants.map((v) => cohort.variantScores[v.id] ?? 0);
+            const bestIdx = scores.indexOf(Math.max(...scores));
+            const bestVariant = variants[bestIdx];
             return (
-              <div key={seg.id} className="rounded-md border border-border bg-surface p-4">
+              <div key={cohort.id} className="rounded-md border border-border bg-surface p-4">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm font-semibold text-foreground">{seg.name}</span>
-                  <span className="tabular text-sm text-muted-foreground">{seg.share}%</span>
+                  <span className="text-sm font-semibold text-foreground">{cohort.name}</span>
+                  <span className="tabular text-sm text-muted-foreground">{cohort.share}%</span>
                 </div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${seg.share}%` }} />
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${cohort.share}%` }}
+                  />
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{seg.summary}</p>
-                {best ? (
+                {cohort.summary ? (
+                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                    {cohort.summary}
+                  </p>
+                ) : null}
+                {bestVariant ? (
                   <div className="mt-3">
-                    <Pill tone="accent">Prefers {best.name}</Pill>
+                    <Pill tone="accent">Prefers {bestVariant.name}</Pill>
                   </div>
                 ) : null}
               </div>
@@ -395,6 +465,43 @@ function Results({ experiment }: { experiment: Experiment }) {
           })}
         </div>
       </section>
+
+      {/* Click map preview */}
+      {Object.keys(results.clickPoints).length > 0 ? (
+        <section className="rounded-lg border border-border bg-card p-6 shadow-card">
+          <div className="flex items-center gap-2">
+            <MousePointerClick className="size-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">Simulated click distribution</h2>
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Synthetic first-click locations overlaid on each variant screenshot.
+          </p>
+          <div className="mt-5 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {variants.map((variant) => {
+              const points = results.clickPoints[variant.id] ?? [];
+              const target = variant.detectedTarget;
+              return (
+                <div key={variant.id}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-sm font-medium text-foreground">{variant.name}</span>
+                    {target ? (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Target className="size-3" />
+                        {target.label}
+                      </span>
+                    ) : null}
+                  </div>
+                  <ClickMapPreview
+                    screenshotUrl={variant.screenshotUrl}
+                    target={target?.boundingBox}
+                    points={points}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {/* Recommendation */}
       <section className="rounded-lg border border-primary/25 bg-accent p-6">
@@ -404,9 +511,63 @@ function Results({ experiment }: { experiment: Experiment }) {
         </p>
         <p className="mt-2 max-w-3xl text-xs leading-relaxed text-accent-foreground/80">
           Synthetic pre-testing narrows the field. Confirm the outcome with real participants before
-          shipping — simulated users are not a replacement for usability research.
+          shipping — simulated sessions are not a replacement for usability research.
         </p>
       </section>
+    </div>
+  );
+}
+
+// ─── Click map preview ───────────────────────────────────────────
+
+function ClickMapPreview({
+  screenshotUrl,
+  target,
+  points,
+}: {
+  screenshotUrl: string | undefined;
+  target: { x: number; y: number; width: number; height: number } | undefined;
+  points: { x: number; y: number; correct: boolean }[];
+}) {
+  if (!screenshotUrl) {
+    return (
+      <div className="flex aspect-[3/4] items-center justify-center rounded-md border border-border bg-surface text-xs text-muted-foreground">
+        No screenshot
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative aspect-[3/4] overflow-hidden rounded-md border border-border bg-surface">
+      <img
+        src={screenshotUrl}
+        alt="Variant screenshot"
+        className="absolute inset-0 size-full object-cover"
+        draggable={false}
+      />
+      {/* Target bounding box */}
+      {target ? (
+        <div
+          className="pointer-events-none absolute border-2 border-primary/70"
+          style={{
+            left: `${target.x * 100}%`,
+            top: `${target.y * 100}%`,
+            width: `${target.width * 100}%`,
+            height: `${target.height * 100}%`,
+          }}
+        />
+      ) : null}
+      {/* Click points */}
+      {points.map((pt, i) => (
+        <div
+          key={i}
+          className={cn(
+            "pointer-events-none absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-white/50",
+            pt.correct ? "bg-success" : "bg-destructive",
+          )}
+          style={{ left: `${pt.x * 100}%`, top: `${pt.y * 100}%` }}
+        />
+      ))}
     </div>
   );
 }
