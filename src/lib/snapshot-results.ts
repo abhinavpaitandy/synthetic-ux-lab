@@ -19,6 +19,7 @@ import type {
   SnapshotVariantMetrics,
   Variant,
 } from "./types";
+import { isTargetReviewed } from "./types";
 
 // ─── Clean adapter ───────────────────────────────────────────────
 
@@ -54,10 +55,26 @@ function toCleanVariant(v: MockExperiment["variants"][number]): Variant {
   return base;
 }
 
+// ─── Prototype draft validation ──────────────────────────────────
+
+export function isPrototypeDraftReady(draft: ExperimentDraft): boolean {
+  if (!draft.name.trim()) return false;
+  if (!draft.persona.trim()) return false;
+  if (!draft.task.trim()) return false;
+  if (!draft.successEvent.trim()) return false;
+  if (draft.variants.length < 2) return false;
+  return draft.variants.every(
+    (v) => v.screenshotUrl && v.detectedTarget && isTargetReviewed(v.detectedTarget),
+  );
+}
+
 // ─── Prototype result generation ─────────────────────────────────
 
-/** Deterministic mock metrics for 2–3 variants based on draft data. */
-const PROTOTYPE_METRICS_3: SnapshotVariantMetrics[] = [
+/**
+ * Deterministic prototype metrics. For two-variant experiments, the
+ * first two entries (A and B) are used. No separate scaled set.
+ */
+const PROTOTYPE_METRICS: SnapshotVariantMetrics[] = [
   {
     correctFirstAction: 71,
     correctTargetSelection: 75,
@@ -73,30 +90,23 @@ const PROTOTYPE_METRICS_3: SnapshotVariantMetrics[] = [
     averageAgentCertainty: 89,
   },
   {
-    correctFirstAction: 83,
-    correctTargetSelection: 86,
-    confusionRate: 11,
-    noActionRate: 4,
-    averageAgentCertainty: 81,
+    correctFirstAction: 79,
+    correctTargetSelection: 82,
+    confusionRate: 13,
+    noActionRate: 5,
+    averageAgentCertainty: 78,
   },
 ];
 
-const PROTOTYPE_METRICS_2: SnapshotVariantMetrics[] = [
-  {
-    correctFirstAction: 74,
-    correctTargetSelection: 78,
-    confusionRate: 14,
-    noActionRate: 7,
-    averageAgentCertainty: 76,
-  },
-  {
-    correctFirstAction: 88,
-    correctTargetSelection: 91,
-    confusionRate: 6,
-    noActionRate: 3,
-    averageAgentCertainty: 85,
-  },
-];
+/**
+ * Prototype-only mapping. Real experiment evidence will be determined
+ * statistically and must not depend on pilot size alone.
+ */
+const PROTOTYPE_EVIDENCE: Record<number, EvidenceConfidence> = {
+  100: "medium",
+  500: "high",
+  1000: "high",
+};
 
 const COHORT_SETS: Record<
   BehaviourDiversity,
@@ -121,31 +131,10 @@ const COHORT_SETS: Record<
     {
       id: "pc-1",
       name: "Hurried",
-      share: 30,
+      share: 26,
       summary: "Scan for the most visually prominent option and commit quickly.",
     },
-    { id: "pc-2", name: "Cautious", share: 28, summary: "Re-read all labels before selecting." },
-    {
-      id: "pc-3",
-      name: "Experienced",
-      share: 24,
-      summary: "Identify target by label regardless of layout.",
-    },
-    {
-      id: "pc-4",
-      name: "Low familiarity",
-      share: 18,
-      summary: "Most sensitive to label ambiguity.",
-    },
-  ],
-  high: [
-    {
-      id: "pc-1",
-      name: "Hurried",
-      share: 26,
-      summary: "Scan for the most visually prominent option.",
-    },
-    { id: "pc-2", name: "Cautious", share: 22, summary: "Re-read all labels before selecting." },
+    { id: "pc-2", name: "Cautious", share: 24, summary: "Re-read all labels before selecting." },
     {
       id: "pc-3",
       name: "Experienced",
@@ -160,9 +149,42 @@ const COHORT_SETS: Record<
     },
     {
       id: "pc-5",
+      name: "Exploratory",
+      share: 14,
+      summary: "Explore multiple options before committing.",
+    },
+  ],
+  high: [
+    {
+      id: "pc-1",
+      name: "Hurried",
+      share: 22,
+      summary: "Scan for the most visually prominent option.",
+    },
+    { id: "pc-2", name: "Cautious", share: 20, summary: "Re-read all labels before selecting." },
+    {
+      id: "pc-3",
+      name: "Experienced",
+      share: 18,
+      summary: "Identify target by label regardless of layout.",
+    },
+    {
+      id: "pc-4",
+      name: "Low familiarity",
+      share: 14,
+      summary: "Most sensitive to label ambiguity.",
+    },
+    {
+      id: "pc-5",
       name: "Low attention",
-      share: 16,
+      share: 14,
       summary: "Easily distracted by non-target elements.",
+    },
+    {
+      id: "pc-6",
+      name: "Exploratory",
+      share: 12,
+      summary: "Explore multiple options before committing.",
     },
   ],
 };
@@ -227,19 +249,16 @@ function buildIssues(variantIds: string[]): SnapshotExperimentResults["observedI
 
 export function buildPrototypeSnapshotExperiment(draft: ExperimentDraft): Experiment {
   const variantIds = draft.variants.map((v) => v.id);
-  const isThree = variantIds.length >= 3;
-  const metricsSet = isThree ? PROTOTYPE_METRICS_3 : PROTOTYPE_METRICS_2;
 
   const variantMetrics: Record<string, SnapshotVariantMetrics> = {};
   variantIds.forEach((vid, i) => {
-    const metrics = metricsSet[i] ?? metricsSet[metricsSet.length - 1];
+    const metrics = PROTOTYPE_METRICS[i] ?? PROTOTYPE_METRICS[PROTOTYPE_METRICS.length - 1];
     if (metrics) variantMetrics[vid] = metrics;
   });
 
   const winnerId = variantIds[Math.min(1, variantIds.length - 1)];
 
-  const evidenceConfidence: EvidenceConfidence =
-    draft.pilotSize >= 1000 ? "high" : draft.pilotSize >= 500 ? "medium" : "low";
+  const evidenceConfidence = PROTOTYPE_EVIDENCE[draft.pilotSize] ?? "medium";
 
   const targets = draft.variants.map((v) => {
     const bb = v.detectedTarget?.boundingBox;
