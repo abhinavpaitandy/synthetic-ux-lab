@@ -8,6 +8,8 @@ export interface ExperimentStepperProps {
   currentStep: number;
   experimentId?: string;
   className?: string;
+  /** When true, completed steps are visual only and do not navigate. */
+  readOnly?: boolean;
 }
 
 const STEPS = [
@@ -22,6 +24,7 @@ export function ExperimentStepper({
   currentStep,
   experimentId,
   className,
+  readOnly = false,
 }: ExperimentStepperProps) {
   return (
     <nav
@@ -81,7 +84,14 @@ export function ExperimentStepper({
           const ariaLabel = `Step ${stepNum}: ${step.label}, ${stateLabel}`;
 
           let linkElement: React.ReactNode;
-          if (step.key === "results") {
+
+          if (readOnly) {
+            linkElement = (
+              <div className="flex items-center gap-2" aria-label={ariaLabel}>
+                {inner}
+              </div>
+            );
+          } else if (step.key === "results") {
             if (experimentId) {
               linkElement = (
                 <Link

@@ -1,5 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, Sparkles, TriangleAlert, Target, MousePointerClick } from "lucide-react";
+import {
+  ArrowLeft,
+  Camera,
+  Sparkles,
+  TriangleAlert,
+  Target,
+  MousePointerClick,
+  PlusCircle,
+} from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -23,16 +31,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, getExperiment } from "@lib/mock-data";
+import { formatDate, getExperiment } from "@/lib/mock-data";
 import {
   buildPrototypeSnapshotExperiment,
+  isPrototypeDraftReady,
   toCleanSnapshotExperiment,
 } from "@/lib/snapshot-results";
 import {
   SNAPSHOT_METRIC_DEFS,
   type Experiment,
   type SnapshotExperimentResults,
-  type SnapshotVariantMetrics,
 } from "@/lib/types";
 import { useDraft } from "@/lib/draft-store";
 import { cn } from "@/lib/utils";
@@ -65,14 +73,48 @@ function ResultsPage() {
   const draftCtx = useDraft();
 
   let experiment: Experiment | null = null;
+  let prototypeExpired = false;
 
   if (isPrototype) {
-    experiment = buildPrototypeSnapshotExperiment(draftCtx.draft);
+    if (isPrototypeDraftReady(draftCtx.draft)) {
+      experiment = buildPrototypeSnapshotExperiment(draftCtx.draft);
+    } else {
+      prototypeExpired = true;
+    }
   } else {
     const mock = getExperiment(experimentId);
     if (mock) {
       experiment = toCleanSnapshotExperiment(mock);
     }
+  }
+
+  if (prototypeExpired) {
+    return (
+      <AppShell>
+        <PageHeader
+          eyebrow="Prototype result · Snapshot Test"
+          title="Prototype result is no longer available"
+          description="This prototype result exists only for the current experiment session. Start a new experiment to run it again."
+        />
+        <PageBody>
+          <div className="rounded-lg border border-border bg-card px-6 py-16 text-center shadow-card">
+            <h2 className="text-base font-semibold text-foreground">
+              Prototype result is no longer available
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+              This prototype result exists only for the current experiment session. Start a new
+              experiment to run it again.
+            </p>
+            <Button asChild className="mt-5">
+              <Link to="/experiments/new">
+                <PlusCircle className="size-4" />
+                New Experiment
+              </Link>
+            </Button>
+          </div>
+        </PageBody>
+      </AppShell>
+    );
   }
 
   if (!experiment) {
@@ -93,8 +135,8 @@ function ResultsPage() {
 
   const isComplete = experiment.status === "complete" && experiment.results;
   const eyebrow = isPrototype
-    ? "Prototype result"
-    : `${experiment.id} · updated ${formatDate(experiment.updatedAt)}`;
+    ? "Prototype result · Snapshot Test"
+    : `Snapshot Test · ${formatDate(experiment.updatedAt)}`;
 
   return (
     <AppShell>
@@ -105,6 +147,10 @@ function ResultsPage() {
         actions={
           <>
             <StatusBadge status={experiment.status} />
+            <Pill tone="info">
+              <Camera className="size-3" />
+              Snapshot
+            </Pill>
             <Button variant="outline" asChild>
               <Link to="/">
                 <ArrowLeft className="size-4" />
@@ -116,7 +162,12 @@ function ResultsPage() {
       />
 
       <PageBody>
-        <ExperimentStepper currentStep={5} experimentId={experiment.id} className="mb-6" />
+        <ExperimentStepper
+          currentStep={5}
+          experimentId={experiment.id}
+          readOnly={!isPrototype}
+          className="mb-6"
+        />
         {isComplete ? (
           <SnapshotResults experiment={experiment} results={experiment.results!} />
         ) : (
@@ -141,7 +192,7 @@ function PendingState({ experiment }: { experiment: Experiment }) {
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
           {running
             ? `Running ${experiment.pilotSize.toLocaleString()} synthetic sessions across ${experiment.variants.length} variants. Results appear here when the pilot completes.`
-            : "Finish the setup and run a pilot to generate comparative results for this experiment."}
+            : "Finish the setup and run a pilot to generate comparative results for this experiment."
         </p>
         <div className="mx-auto mt-6 max-w-sm space-y-2">
           {experiment.variants.map((v, i) => (
@@ -165,18 +216,40 @@ function PendingState({ experiment }: { experiment: Experiment }) {
 // ─── Context card ────────────────────────────────────────────────
 
 function ContextCard({ experiment }: { experiment: Experiment }) {
+  const diversityLabel =
+    experiment.behaviourDiversity.charAt(0).toUpperCase() +
+    experiment.behaviourDiversity.slice(1);
+
+  const fields = [
+    { label: "Persona", value: experiment.persona },
+    { label: "Task", value: experiment.task },
+    { label: "Success event", value: experiment.successEvent },
+    {
+      label: "Device",
+      value: experiment.device === "mobile" ? "Mobile" : "Desktop",
+    },
+    {
+      label: "Pilot",
+      value: `${experiment.pilotSize.toLocaleString()} synthetic sessions / variant`,
+    },
+    { label: "Behaviour diversity", value: diversityLabel },
+    { label: "Variants", value: String(experiment.variants.length) },
+  ];
+
   return (
-    <section className="grid gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-3">
-      {[
-        { label: "Primary persona", value: experiment.persona },
-        { label: "User task", value: experiment.task },
-        { label: "Success event", value: experiment.successEvent },
-      ].map((f) => (
-        <div key={f.label} className="bg-card px-5 py-4">
-          <div className="label-caps">{f.label}</div>
-          <p className="mt-1.5 text-sm leading-relaxed text-foreground">{f.value}</p>
-        </div>
-      ))}
+    <section className="rounded-lg border border-border bg-card p-5 shadow-card">
+      <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+        {fields.map((f) => (
+          <div key={f.label}>
+            <div className="label-caps">{f.label}</div>
+            <p className="mt-1 text-sm leading-relaxed text-foreground">{f.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
+        Synthetic session count reflects simulated behavioural exploration. It is not equivalent to
+        a human research sample size.
+      </p>
     </section>
   );
 }
