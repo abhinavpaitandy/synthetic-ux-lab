@@ -118,7 +118,10 @@ function SimulationSetupPage() {
             // Prototype only:
             // Results v2 will replace this fixed mock experiment with
             // results generated from the current experiment draft.
-            navigate({ to: "/experiments/$experimentId", params: { experimentId: "exp-1042" } });
+            navigate({
+              to: "/experiments/$experimentId",
+              params: { experimentId: "prototype-current" },
+            });
           }
         },
         (i + 1) * PHASE_DURATION,
