@@ -55,14 +55,7 @@ const DIVERSITY_OPTIONS: {
 const COHORT_PREVIEW: Record<BehaviourDiversity, string[]> = {
   low: ["Cautious", "Experienced", "Hurried"],
   medium: ["Hurried", "Cautious", "Experienced", "Low familiarity", "Exploratory"],
-  high: [
-    "Hurried",
-    "Cautious",
-    "Experienced",
-    "Low familiarity",
-    "Low attention",
-    "Exploratory",
-  ],
+  high: ["Hurried", "Cautious", "Experienced", "Low familiarity", "Low attention", "Exploratory"],
 };
 
 const RUN_PHASES = [
@@ -223,9 +216,7 @@ function SimulationSetupPage() {
                       className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-2.5"
                     >
                       <div className="min-w-0">
-                        <span className="text-sm font-medium text-foreground">
-                          {variant.name}
-                        </span>
+                        <span className="text-sm font-medium text-foreground">{variant.name}</span>
                         <span className="ml-2 text-xs text-muted-foreground">
                           Target: {target.label}
                         </span>

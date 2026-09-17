@@ -107,9 +107,7 @@ function VariantUploadPage() {
                   index={index}
                   canRemove={variants.length > 2}
                   onNameChange={(name) => updateVariant(variant.id, { name })}
-                  onDescriptionChange={(description) =>
-                    updateVariant(variant.id, { description })
-                  }
+                  onDescriptionChange={(description) => updateVariant(variant.id, { description })}
                   onScreenshotChange={(screenshotUrl) =>
                     updateVariant(variant.id, { screenshotUrl })
                   }

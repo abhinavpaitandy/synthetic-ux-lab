@@ -36,11 +36,7 @@ export function ExperimentStepper({
           const stepNum = i + 1;
           const isCompleted = stepNum < currentStep;
           const isCurrent = stepNum === currentStep;
-          const stateLabel = isCompleted
-            ? "completed"
-            : isCurrent
-              ? "current"
-              : "upcoming";
+          const stateLabel = isCompleted ? "completed" : isCurrent ? "current" : "upcoming";
 
           const circle = (
             <span
@@ -51,11 +47,7 @@ export function ExperimentStepper({
                 !isCompleted && !isCurrent && "border border-border text-muted-foreground",
               )}
             >
-              {isCompleted ? (
-                <Check className="size-3.5" aria-hidden="true" />
-              ) : (
-                stepNum
-              )}
+              {isCompleted ? <Check className="size-3.5" aria-hidden="true" /> : stepNum}
             </span>
           );
 
@@ -124,18 +116,12 @@ export function ExperimentStepper({
 
           return (
             <Fragment key={step.key}>
-              <li
-                className="flex items-center"
-                aria-current={isCurrent ? "step" : undefined}
-              >
+              <li className="flex items-center" aria-current={isCurrent ? "step" : undefined}>
                 {linkElement}
               </li>
               {i < STEPS.length - 1 && (
                 <div
-                  className={cn(
-                    "mx-1 h-px w-6 md:w-10",
-                    isCompleted ? "bg-primary" : "bg-border",
-                  )}
+                  className={cn("mx-1 h-px w-6 md:w-10", isCompleted ? "bg-primary" : "bg-border")}
                   aria-hidden="true"
                 />
               )}
